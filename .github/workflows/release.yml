@@ -7,7 +7,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  PNPM_HOME: ~/.local/share/pnpm
 
 jobs:
   check:
@@ -16,23 +15,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: pnpm
 
-      - name: Install pnpm
-        run: npm install -g pnpm@9
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
 
       - name: TypeScript check
         run: npx tsc --noEmit
 
       - name: Rust check
-        run: cd src-tauri && cargo check --locked
+        run: cd src-tauri && cargo check
 
   build-and-release:
     name: Build & Release (${{ matrix.target }})
@@ -51,14 +58,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: pnpm
 
-      - name: Install pnpm
-        run: npm install -g pnpm@9
-
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install Linux system dependencies
         if: matrix.target == 'linux'
@@ -68,7 +78,10 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libappindicator3-dev \
             librsvg2-dev \
-            patchelf
+            patchelf \
+            build-essential \
+            pkg-config \
+            libssl-dev
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
