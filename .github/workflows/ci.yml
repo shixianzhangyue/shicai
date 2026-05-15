@@ -20,15 +20,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Enable corepack (pnpm)
-        run: corepack enable && corepack prepare pnpm@9 --activate
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-pnpm-
+      - name: Enable corepack
+        run: corepack enable
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -82,8 +75,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Enable corepack (pnpm)
-        run: corepack enable && corepack prepare pnpm@9 --activate
+      - name: Enable corepack
+        run: corepack enable
 
       - uses: dtolnay/rust-toolchain@stable
 

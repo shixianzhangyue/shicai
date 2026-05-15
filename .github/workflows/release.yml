@@ -19,8 +19,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Enable corepack (pnpm)
-        run: corepack enable && corepack prepare pnpm@9 --activate
+      - name: Enable corepack
+        run: corepack enable
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -54,8 +54,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Enable corepack (pnpm)
-        run: corepack enable && corepack prepare pnpm@9 --activate
+      - name: Enable corepack
+        run: corepack enable
 
       - uses: dtolnay/rust-toolchain@stable
 
