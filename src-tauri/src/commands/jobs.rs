@@ -231,11 +231,11 @@ pub fn update_job(
     if let Some(ref v) = input.department {
         param_refs.push(v);
     }
-    if let Some(v) = input.salary_min {
-        param_refs.push(&v);
+    if let Some(ref v) = input.salary_min {
+        param_refs.push(v);
     }
-    if let Some(v) = input.salary_max {
-        param_refs.push(&v);
+    if let Some(ref v) = input.salary_max {
+        param_refs.push(v);
     }
     if let Some(ref v) = input.description {
         param_refs.push(v);

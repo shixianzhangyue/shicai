@@ -49,7 +49,9 @@ fn extract_pdf(file_path: &str) -> Result<String, ExtractError> {
 }
 
 fn extract_docx(file_path: &str) -> Result<String, ExtractError> {
-    let doc = docx_rs::read_docx_from_file(file_path)
+    let bytes = std::fs::read(file_path)
+        .map_err(|e| ExtractError::DocxError(format!("Failed to read file: {:?}", e)))?;
+    let doc = docx_rs::read_docx(&bytes)
         .map_err(|e| ExtractError::DocxError(format!("{:?}", e)))?;
 
     let mut paragraphs: Vec<String> = Vec::new();

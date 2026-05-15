@@ -1,7 +1,8 @@
-use crate::db::pool::DbPool;
+﻿use crate::db::pool::DbPool;
 use crate::services::llm_client::{
     CreateLlmConfigInput, LlmClient, LlmConfig, UpdateLlmConfigInput, obfuscate_key,
 };
+use rusqlite::OptionalExtension;
 use rusqlite::params;
 
 /// Lists all LLM configurations ordered by creation time (newest first).

@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+﻿use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::str::FromStr;
 use std::time::Duration;
@@ -247,7 +247,7 @@ impl LlmClient {
             .trim_end_matches("```")
             .trim();
 
-        let mut parsed: serde_json::Value = serde_json::from_str(clean_content)
+        let parsed: serde_json::Value = serde_json::from_str(clean_content)
             .map_err(|e| LlmError::ParseError(format!("Failed to parse LLM output as JSON: {}. Raw: {}", e, clean_content.chars().take(500).collect::<String>())))?;
 
         let raw_text_preview = text.chars().take(1000).collect::<String>();

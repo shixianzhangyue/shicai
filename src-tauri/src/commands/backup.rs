@@ -1,7 +1,8 @@
-use std::fs;
+﻿use std::fs;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use tauri::AppHandle;
+use tauri::Manager;
 use zip::write::FileOptions;
 
 /// Exports the database and resource files to a zip archive.
