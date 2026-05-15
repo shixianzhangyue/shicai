@@ -1,31 +1,33 @@
-# TalentVault · 本地招聘管理系统
+# TalentVault · 拾才 · 本地招聘管理系统
 
-> **版本：** 0.1.0  
-> **定位：** Windows / macOS / Linux 本地运行的个人招聘管理工具，以人才库管理为核心，猎头工作流驱动  
-> **技术栈：** Tauri 2 + React 18 + TypeScript + SQLite  
+> **版本：** 1.0.0
+> **状态：** ✅ Phase 1-3 开发完成（V1.0 归档）
+> **定位：** Windows / macOS / Linux 本地运行的个人招聘管理工具，以人才库管理为核心，猎头工作流驱动
+> **技术栈：** Tauri 2 + React 18 + TypeScript + SQLite
 > **包体：** ~5MB（Tauri 桌面端）
+> **GitHub：** https://github.com/shixianzhangyue/shicai
 
 ---
 
 ## 功能概览
 
-TalentVault 是一款面向招聘专员和猎头的本地桌面应用，所有数据存储在本地 SQLite 数据库中，无需联网即可使用，同时支持接入 LLM API 实现简历智能解析。
+TalentVault（拾才）是一款面向招聘专员和猎头的本地桌面应用，所有数据存储在本地 SQLite 数据库中，无需联网即可使用，同时支持接入 LLM API 实现简历智能解析。
 
 | 模块 | 功能 |
 |------|------|
 | **人才库** | 候选人列表、详情、新增/编辑、标签管理、附件管理、简历预览 |
 | **职位管理** | 职位列表、新建/编辑、流程阶段配置（看板）、职位模板 |
-| **招聘流程** | 拖拽式看板、候选人投递追踪、面试日程 |
+| **招聘流程** | 拖拽式看板、候选人流转追踪、面试跟进记录 |
 | **仪表盘** | 数据统计、漏斗分析、ECharts 可视化图表 |
-| **设置** | LLM 配置（智能解析）、数据导出（Excel）、备份恢复、流程模板 |
+| **设置** | LLM 配置（智能解析）、数据导出（Excel/CSV）、备份恢复、流程模板 |
 
 ### 核心亮点
 
 - **全本地运行**：数据存储在本地 SQLite，无需注册账号，无需联网
-- **AI 智能解析**：接入 OpenAI / 百度 ERNIE / 通义千问 / 讯飞星火等 LLM，上传简历自动提取结构化信息
+- **AI 智能解析**：接入 OpenAI / 通义千问等 LLM，上传简历自动提取结构化信息（Step 24 开发中）
 - **拖拽看板**：类似 Trello 的招聘流程看板，直观管理候选人状态
 - **Excel 导出**：支持字段勾选、拖拽排序、自定义导出格式
-- **备份恢复**：一键备份/恢复，支持 .bak 回滚机制
+- **备份恢复**：一键备份/恢复，支持 .bak 自动回滚机制
 - **暗色主题**：参考 Linear / Raycast 风格的暗色 UI
 
 ---
@@ -35,7 +37,7 @@ TalentVault 是一款面向招聘专员和猎头的本地桌面应用，所有�
 | 依赖 | 版本 | 说明 |
 |------|------|------|
 | Node.js | >= 18 | 前端构建 |
-| pnpm | >= 8 | 包管理（推荐） |
+| pnpm | >= 9 | 包管理（推荐） |
 | Rust | >= 1.75 | Tauri 后端编译 |
 | Tauri CLI | >= 2.0 | 桌面应用构建 |
 
@@ -45,6 +47,11 @@ TalentVault 是一款面向招聘专员和猎头的本地桌面应用，所有�
 - **macOS** 12+
 - **Linux**（需要 WebKitGTK）
 
+> ⚠️ **Windows 本地 Rust 编译已知问题**：Tauri 2.11.1 + Rust 1.95.0 在 Windows 上触发 `STATUS_ACCESS_VIOLATION`，本地编译失败。解决方案：
+> - 使用 WSL2 编译
+> - 使用 macOS / Linux 实体机
+> - 使用 GitHub Actions CI（Linux runner）
+
 ---
 
 ## 快速开始
@@ -52,7 +59,7 @@ TalentVault 是一款面向招聘专员和猎头的本地桌面应用，所有�
 ### 1. 克隆项目
 
 ```bash
-git clone <仓库地址>
+git clone https://github.com/shixianzhangyue/shicai.git
 cd talent-vault
 ```
 
@@ -77,9 +84,9 @@ pnpm tauri build
 ```
 
 构建产物：
-- **Windows**: `src-tauri/target/release/talent-vault.exe`
-- **macOS**: `src-tauri/target/release/bundle/macos/TalentVault.app`
-- **Linux**: `src-tauri/target/release/bundle/deb/*.deb`
+- **Windows**: `src-tauri/target/release/bundle/msi/`
+- **macOS**: `src-tauri/target/release/bundle/dmg/`
+- **Linux**: `src-tauri/target/release/bundle/deb/`
 
 ---
 
@@ -104,14 +111,28 @@ talent-vault/
 │   └── App.tsx                   # 应用入口
 ├── src-tauri/                    # Tauri Rust 后端
 │   ├── src/
-│   │   ├── commands/             # Tauri 命令处理器
+│   │   ├── commands/             # Tauri 命令处理器（15 个模块）
 │   │   ├── db/                   # 数据库连接与迁移
 │   │   ├── services/             # 业务服务层
+│   │   ├── logger.rs             # 日志初始化
+│   │   ├── validate.rs           # 统一输入校验
 │   │   └── lib.rs                # Tauri 入口
 │   ├── Cargo.toml                # Rust 依赖
 │   └── tauri.conf.json           # Tauri 配置
 ├── public/                       # 静态资源
-├── docs/                         # 项目文档（PRD、架构、QA报告）
+├── docs/                         # 项目文档
+│   ├── SPEC-v1.0.md            # 完整开发规格书（V1.0 归档）
+│   ├── phase3-arch.md          # Phase 3 增量架构设计
+│   ├── phase3-prd.md          # Phase 3 PRD
+│   ├── phase3-qa-report.md    # Phase 3 QA 报告
+│   ├── class-diagram.mermaid   # 最新类图
+│   ├── sequence-diagram.mermaid # 最新时序图
+│   └── archive/                # 历史文档归档
+│       ├── README.md            # 归档索引
+│       └── steps/              # Step 级别中间文档
+├── .github/workflows/           # CI/CD 流水线
+│   ├── ci.yml                  # CI 流水线
+│   └── release.yml            # Release 流水线
 └── package.json                  # 前端依赖
 ```
 
@@ -125,13 +146,17 @@ TalentVault 使用 SQLite 作为本地数据库，通过 `refinery` 管理迁移
 
 | 表名 | 说明 |
 |------|------|
-| `jobs` | 职位信息 |
-| `candidates` | 候选人信息 |
+| `jobs` | 职位信息（含软删除 `deleted_at`） |
+| `candidates` | 候选人信息（含软删除 `deleted_at`） |
 | `tags` | 标签 |
 | `candidate_tags` | 候选人-标签关联 |
-| `pipeline_stages` | 流程阶段 |
-| `pipeline_templates` | 流程模板 |
-| `llm_configs` | LLM 配置（Step 24 新增）|
+| `pipeline_stages` | 流程阶段定义 |
+| `pipeline_templates` | 流程模板（V4 迁移） |
+| `candidate_pipeline` | 候选人-职位-阶段关联 |
+| `follow_ups` | 跟进记录 |
+| `candidate_relations` | 候选人关系网络 |
+| `llm_configs` | LLM 配置（Step 24） |
+| `audit_logs` | 审计日志（软删除追踪） |
 
 ### 迁移脚本
 
@@ -143,12 +168,12 @@ TalentVault 使用 SQLite 作为本地数据库，通过 `refinery` 管理迁移
 | V2 | `V2__add_export_fields.sql` | 导出字段表 |
 | V3 | `V3__add_backups.sql` | 备份表 |
 | V4 | `V4__pipeline_templates.sql` | 流程模板表 |
-| V5 | `V5__add_llm_configs.sql` | LLM 配置表（Step 24）|
+| V5 | `V5__add_llm_configs.sql` | LLM 配置表（Step 24） |
 
 数据库文件默认存储在系统应用数据目录：
-- **Windows**: `%APPDATA%/com.talent-vault.app/db.sqlite`
-- **macOS**: `~/Library/Application Support/com.talent-vault.app/db.sqlite`
-- **Linux**: `~/.local/share/com.talent-vault.app/db.sqlite`
+- **Windows**: `%APPDATA%/com.talent-vault.app/data/talent.db`
+- **macOS**: `~/Library/Application Support/com.talent-vault.app/data/talent.db`
+- **Linux**: `~/.local/share/com.talent-vault.app/data/talent.db`
 
 ---
 
@@ -160,11 +185,11 @@ TalentVault 使用 SQLite 作为本地数据库，通过 `refinery` 管理迁移
 # 单独启动前端开发服务器（用于快速迭代 UI）
 pnpm dev
 
-# 代码格式化
-pnpm format
-
 # TypeScript 类型检查
 npx tsc --noEmit
+
+# 前端生产构建
+pnpm build
 ```
 
 ### 后端开发
@@ -173,7 +198,7 @@ npx tsc --noEmit
 # 进入 Rust 项目目录
 cd src-tauri
 
-# 检查 Rust 代码（不编译）
+# 检查 Rust 代码（不编译完整项目）
 cargo check
 
 # 运行测试
@@ -182,6 +207,8 @@ cargo test
 # 格式化代码
 cargo fmt
 ```
+
+> ⚠️ Windows 用户：`cargo check` 会触发 `STATUS_ACCESS_VIOLATION`，请在 WSL2 或 GitHub Actions 中执行 Rust 编译。
 
 ### 添加新的 Tauri 命令
 
@@ -195,34 +222,24 @@ cargo fmt
 
 ## 打包发布
 
-### 前提条件
+### GitHub Actions CI
 
-- 前端构建通过：`pnpm run build`
-- Rust 编译通过：`cd src-tauri && cargo check`
+推送至 `main` 分支自动触发 CI：
+- 前端 TypeScript 类型检查
+- 前端生产构建
+- Rust 代码检查（Linux）
 
-### Windows 打包
+### GitHub Actions Release
 
+推送 tag 自动触发 Release 构建：
 ```bash
-pnpm tauri build
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
-产物位于：`src-tauri/target/release/bundle/msi/TalentVault_0.1.0_x64_en-US.msi`
+将自动构建 Windows (.msi)、macOS (.dmg)、Linux (.deb/.AppImage) 并创建 GitHub Release。
 
-### macOS 打包
-
-```bash
-pnpm tauri build --target universal-apple-darwin
-```
-
-产物位于：`src-tauri/target/release/bundle/dmg/TalentVault_0.1.0_universal.dmg`
-
-### Linux 打包
-
-```bash
-pnpm tauri build
-```
-
-产物位于：`src-tauri/target/release/bundle/deb/talent-vault_0.1.0_amd64.deb`
+> ⚠️ **已知问题**：当前 CI 流水线存在 pnpm 配置问题（Run #7、#8 均失败），正在修复中。GitHub Actions 构建功能暂时不可用，请本地使用 WSL2 或 Linux/macOS 实体机构建。
 
 ---
 
@@ -238,35 +255,38 @@ pnpm tauri build
 | 数据库 | SQLite (rusqlite) | 本地持久化存储 |
 | 连接池 | r2d2_sqlite | 并发安全连接池 |
 | 数据库迁移 | refinery | 版本化迁移管理 |
-| HTTP 客户端 | reqwest | Rust 异步 HTTP |
+| HTTP 客户端 | reqwest | Rust 异步 HTTP（LLM API） |
 | 图表 | ECharts | 仪表盘数据可视化 |
 | Excel | SheetJS (xlsx) | 数据导入导出 |
 | PDF 预览 | react-pdf | 简历预览 |
 | 拖拽 | @dnd-kit/core + sortable | 看板拖拽、导出字段排序 |
 | 构建工具 | Vite 5 | 前端构建 |
 | 包管理 | pnpm | 快速、节省磁盘 |
+| 文件压缩 | zip (Rust crate) | 备份打包 |
+| 输入校验 | validator (Rust crate) | 统一输入校验 |
+| 日志 | log + simplelog (Rust crate) | 文件日志输出 |
 
 ---
 
-## 常见问题
+## 已知问题
 
-### Q: Rust 编译失败（STATUS_ACCESS_VIOLATION）？
+| # | 问题 | 状态 |
+|---|------|------|
+| 1 | Windows 本地 `cargo check` 触发 `STATUS_ACCESS_VIOLATION`（Tauri 2.11.1 + Rust 1.95.0） | 已知限制，使用 WSL2/GitHub Actions 规避 |
+| 2 | CI 流水线 pnpm 配置问题（Run #7、#8 失败） | 修复中（pnpm-workspace.yaml 已修复，待验证） |
+| 3 | Step 24 智能简历解析未完结 | 框架已就位，待接入 LLM API |
+| 4 | 导出范围 `filtered` 前端 UI 未暴露 | 后端已支持，前端待补全 |
 
-这是 Windows 环境下 Rust 工具链与 Tauri build script 的已知兼容性问题。建议在以下环境编译：
-- WSL2 (Windows Subsystem for Linux)
-- macOS 或 Linux 实体机
-- GitHub Actions CI（Linux runner）
+---
 
-### Q: LLM 智能解析不工作？
+## 文档归档
 
-1. 在设置页「LLM 配置」Tab 中配置 API Key
-2. 支持的 Provider：OpenAI、百度 ERNIE、通义千问、讯飞星火、自定义（OpenAI 兼容格式）
-3. 点击「测试连接」确认配置可用
-4. 仅支持文本型 PDF / DOCX / TXT，图片型 PDF 暂不支持
+V1.0 开发完成，历史文档已归档至 `docs/archive/`：
 
-### Q: 如何迁移数据库？
-
-应用启动时会自动运行 `refinery` 迁移脚本，无需手动操作。
+- **完整规格书**：`docs/SPEC-v1.0.md`
+- **Phase 3 文档**：`docs/phase3-*.md`
+- **Step 级别中间文档**：`docs/archive/steps/`
+- **归档索引**：`docs/archive/README.md`
 
 ---
 
