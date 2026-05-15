@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # 前端 + Rust 检查（快速失败）
+  check:
+    name: Pre-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Rust check
+        run: cd src-tauri && cargo check --locked
+
+  # 多平台构建并发布 Release
+  build-and-release:
+    name: Build & Release (${{ matrix.target }})
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            target: linux
+            artifact-name: linux
+          - platform: windows-latest
+            target: windows
+            artifact-name: windows
+          - platform: macos-latest
+            target: macos
+            artifact-name: macos
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux system dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: ./
+          tauriScript: pnpm tauri
+          # 自动创建 Release 并上传产物
+          tagName: ${{ github.ref_name }}
+          releaseName: "TalentVault ${{ github.ref_name }}"
+          releaseBody: |
+            ## 拾才 TalentVault ${{ github.ref_name }}
+
+            本地招聘管理系统 - Tauri 2 + React + TypeScript + SQLite
+
+            ### 下载
+            - **Windows**: 下载 `.msi` 或 `.nsis.zip`
+            - **macOS**: 下载 `.dmg` 或 `.app.tar.gz`
+            - **Linux**: 下载 `.deb` 或 `.AppImage`
+
+            ### 安装
+            详见 [README.md](https://github.com/shixianzhangyue/shicai#readme)
+          releaseDraft: false
+          prerelease: false
