@@ -1,0 +1,60 @@
+sequenceDiagram
+    autonumber
+    participant UI as CandidateForm
+    participant Btn as ResumeParseButton
+    participant Store as llmConfigStore
+    participant API as api.resumeParser
+    participant Inv as Tauri Invoke
+    participant Cmd as parse_resume
+    participant Ext as text_extractor
+    participant LLM as llm_client
+    participant DB as SQLite
+
+    UI->>Btn: 渲染（嵌入表单顶部）
+    Btn->>Btn: 用户点击「智能解析简历」
+    Btn->>Btn: 防抖 300ms + 状态锁检查
+    Btn->>Btn: 唤起系统文件选择器（过滤 pdf/docx/txt）
+    Btn->>Btn: setStage('extracting')
+    Btn->>API: api.resumeParser.parse(filePath)
+    API->>Inv: invoke<ParsedResume>('parse_resume', {filePath})
+    Inv->>Cmd: parse_resume(state, filePath)
+
+    Cmd->>DB: SELECT * FROM llm_configs WHERE is_default = 1
+    DB-->>Cmd: Option<LlmConfig>
+    alt 无默认配置
+        Cmd-->>Inv: Err("请先配置 LLM")
+        Inv-->>API: throw
+        API-->>Btn: catch err
+        Btn->>Btn: setStage('error')
+    else 有默认配置
+        Cmd->>Ext: extract_text(filePath)
+        alt 图片型 PDF
+            Ext-->>Cmd: Err(ImagePdfNotSupported)
+            Cmd-->>Inv: Err("图片型 PDF 暂不支持")
+        else 提取成功
+            Ext-->>Cmd: Ok(raw_text)
+            Cmd->>LLM: parse_resume(config, raw_text)
+            LLM->>LLM: 构造 ChatCompletion 请求（含 System Prompt）
+            LLM->>LLM: HTTP POST base_url/chat/completions
+            alt 网络超时 (>30s)
+                LLM-->>Cmd: Err(NetworkTimeout)
+                Cmd-->>Inv: Err("LLM 请求超时")
+            else API 返回错误
+                LLM-->>Cmd: Err(ApiError(msg))
+                Cmd-->>Inv: Err(msg)
+            else 成功返回
+                LLM->>LLM: 解析 choices[0].message.content 为 JSON
+                LLM-->>Cmd: Ok(ParsedResume)
+            end
+            Cmd-->>Inv: Ok(ParsedResume)
+            Inv-->>API: ParsedResume
+            API-->>Btn: ParsedResume
+            Btn->>Btn: setStage('preview')
+            Btn->>UI: open ParsePreviewDialog
+        end
+    end
+
+    UI->>UI: ParsePreviewDialog 展示原始文本 + 提取字段
+    UI->>UI: 用户编辑字段后点击「确认填充」
+    UI->>UI: 将 ParsedResume 映射到表单 state
+    UI->>Btn: setStage('filled')

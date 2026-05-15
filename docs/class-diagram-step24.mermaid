@@ -1,0 +1,161 @@
+classDiagram
+    direction LR
+
+    class LlmConfig {
+        +i64 id
+        +String provider
+        +String api_key
+        +String base_url
+        +String model_name
+        +bool is_default
+        +String created_at
+        +String updated_at
+    }
+
+    class CreateLlmConfigInput {
+        +String provider
+        +String api_key
+        +String base_url
+        +String model_name
+    }
+
+    class UpdateLlmConfigInput {
+        +Option~String~ provider
+        +Option~String~ api_key
+        +Option~String~ base_url
+        +Option~String~ model_name
+        +Option~bool~ is_default
+    }
+
+    class ParsedResume {
+        +Option~String~ name
+        +Option~String~ phone
+        +Option~String~ email
+        +Option~String~ current_company
+        +Option~String~ current_position
+        +Option~String~ education
+        +Option~i32~ years_exp
+        +Vec~String~ skills
+        +Vec~WorkExperience~ work_experiences
+        +String raw_text_preview
+    }
+
+    class WorkExperience {
+        +String company
+        +String position
+        +String duration
+        +Option~String~ description
+    }
+
+    class Provider {
+        <<enum>>
+        OpenAI
+        BaiduErnie
+        Qwen
+        Xunfei
+        Custom
+        +from_str(s: &str) Result~Self, String~
+        +default_base_url() &'static str
+        +default_model() &'static str
+    }
+
+    class LlmError {
+        <<enum>>
+        NetworkTimeout
+        ApiError(String)
+        ParseError(String)
+        NoConfig
+    }
+
+    class ExtractError {
+        <<enum>>
+        UnsupportedFormat
+        ImagePdfNotSupported
+        IoError(std::io::Error)
+        PdfError(String)
+        DocxError(String)
+    }
+
+    class LlmClient {
+        +test_connection(config: &LlmConfig) Result~String, LlmError~
+        +parse_resume(config: &LlmConfig, text: &str) Result~ParsedResume, LlmError~
+        -build_request(config: &LlmConfig, messages: Vec~Message~) RequestBuilder
+        -obfuscate_key(key: &str) String
+        -deobfuscate_key(key: &str) String
+    }
+
+    class TextExtractor {
+        +extract_text(file_path: &str) Result~String, ExtractError~
+        -extract_pdf(path: &str) Result~String, ExtractError~
+        -extract_docx(path: &str) Result~String, ExtractError~
+        -extract_txt(path: &str) Result~String, ExtractError~
+    }
+
+    class PromptEngine {
+        <<module>>
+        +RESUME_PARSE_PROMPT: &'static str
+    }
+
+    class DbPool {
+        +get() Result~PooledConnection~SQLiteConnection~~
+    }
+
+    class LlmConfigCommands {
+        +list_llm_configs(state: State~DbPool~) Result~Vec~LlmConfig~, String~
+        +create_llm_config(state, input) Result~LlmConfig, String~
+        +update_llm_config(state, id, input) Result~LlmConfig, String~
+        +delete_llm_config(state, id) Result~(), String~
+        +get_default_llm_config(state) Result~Option~LlmConfig~, String~
+        +test_llm_connection(provider, api_key, base_url, model_name) Result~String, String~
+    }
+
+    class ResumeParserCommands {
+        +parse_resume(state, file_path) Result~ParsedResume, String~
+    }
+
+    class LlmConfigStore {
+        +LlmConfig[] configs
+        +boolean loading
+        +string | null error
+        +fetchConfigs()
+        +createConfig(input)
+        +updateConfig(id, input)
+        +deleteConfig(id)
+        +setDefault(id)
+    }
+
+    class ResumeParseButton {
+        +ParseStage stage
+        +boolean isParsing
+        +FileInfo | null fileInfo
+        +onParseSuccess(result: ParsedResume)
+        +handleFileSelect()
+        +handleParse()
+    }
+
+    class ParsePreviewDialog {
+        +ParsedResume result
+        +boolean open
+        +onConfirm(result: ParsedResume)
+        +onCancel()
+    }
+
+    class CandidateForm {
+        +CandidateFormState formState
+        +handleParsedResumeFill(result: ParsedResume)
+    }
+
+    LlmConfigCommands --> DbPool : uses
+    LlmConfigCommands --> LlmClient : test_connection
+    ResumeParserCommands --> DbPool : uses
+    ResumeParserCommands --> TextExtractor : extract_text
+    ResumeParserCommands --> LlmClient : parse_resume
+    ResumeParserCommands --> PromptEngine : uses
+    LlmClient --> Provider : uses
+    LlmClient --> LlmError : returns
+    TextExtractor --> ExtractError : returns
+    ParsedResume --> WorkExperience : contains
+    LlmConfigStore --> LlmConfigCommands : invokes
+    ResumeParseButton --> ParsePreviewDialog : opens
+    ResumeParseButton --> CandidateForm : onParseSuccess
+    ParsePreviewDialog --> CandidateForm : onConfirm

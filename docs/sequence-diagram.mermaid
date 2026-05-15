@@ -1,0 +1,31 @@
+sequenceDiagram
+    autonumber
+    participant UI as JobForm
+    participant Store as jobStore
+    participant API as api.jobs
+    participant Inv as Tauri Invoke
+    participant Cmd as create_job
+    participant Val as validate_input
+    participant DB as SQLite
+
+    UI->>Store: createJob(input)
+    Store->>Store: set({loading:true, error:null})
+    Store->>API: api.jobs.create(input)
+    API->>Inv: invoke<Job>('create_job', {input})
+    Inv->>Cmd: create_job(state, input)
+    Cmd->>Val: validate_input(&input)
+    alt 校验失败
+        Val-->>Cmd: Err(String)
+        Cmd-->>Inv: Err(msg)
+        Inv-->>API: throw msg
+        API-->>Store: catch err
+        Store->>Store: set({error:msg, loading:false})
+    else 校验通过
+        Cmd->>DB: INSERT INTO jobs ...
+        DB-->>Cmd: ok
+        Cmd-->>Inv: Result<Job, String>
+        Inv-->>API: Job
+        API-->>Store: Job
+        Store->>Store: set({jobs:[job, ...jobs], loading:false})
+    end
+    Store-->>UI: re-render

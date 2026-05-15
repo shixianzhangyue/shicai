@@ -1,0 +1,85 @@
+classDiagram
+    direction LR
+
+    class Job {
+        +String id
+        +String title
+        +Option~String~ department
+        +Option~f64~ salary_min
+        +Option~f64~ salary_max
+        +Option~String~ description
+        +Option~String~ requirements
+        +String status
+        +Vec~String~ tags
+        +String created_at
+        +String updated_at
+    }
+
+    class CreateJobInput {
+        +String title
+        +Option~String~ department
+        +Option~f64~ salary_min
+        +Option~f64~ salary_max
+        +Option~String~ description
+        +Option~String~ requirements
+        +String status
+        +Vec~String~ tags
+        +validate()
+    }
+
+    class UpdateJobInput {
+        +Option~String~ title
+        +Option~String~ department
+        +Option~f64~ salary_min
+        +Option~f64~ salary_max
+        +Option~String~ description
+        +Option~String~ requirements
+        +Option~String~ status
+        +Option~Vec~String~~ tags
+        +validate()
+    }
+
+    class DbPool {
+        +get() Result~PooledConnection~SQLiteConnection~~
+    }
+
+    class JobState {
+        +Job[] jobs
+        +Job | null selectedJob
+        +boolean loading
+        +string | null error
+        +string searchKeyword
+        +JobStatus | null statusFilter
+        +fetchJobs()
+        +createJob(input: CreateJobInput)
+        +updateJob(id, input: UpdateJobInput)
+        +deleteJob(id)
+        +duplicateJob(id)
+        +updateJobStatus(id, status)
+        +setSearchKeyword(kw)
+        +setStatusFilter(filter)
+        +setSelectedJob(job)
+    }
+
+    class ApiJobs {
+        +list() Promise~Job[]~
+        +get(id: string) Promise~Job~
+        +create(input: CreateJobInput) Promise~Job~
+        +update(id: string, input: UpdateJobInput) Promise~Job~
+        +delete(id: string) Promise~void~
+        +duplicate(id: string) Promise~Job~
+    }
+
+    class TagPicker {
+        +Tag[] tags
+        +string[] selectedIds
+        +onChange(selectedIds: string[])
+        +placeholder?: string
+    }
+
+    JobState --> ApiJobs : uses
+    ApiJobs --> DbPool : invoke
+    CreateJobInput --> Job : produces
+    UpdateJobInput --> Job : updates
+    JobForm --> TagPicker : composes
+    JobForm --> JobState : uses
