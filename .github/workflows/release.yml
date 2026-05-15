@@ -7,6 +7,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  PNPM_HOME: ~/.local/share/pnpm
 
 jobs:
   check:
@@ -19,8 +20,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Enable corepack
-        run: corepack enable
+      - name: Install pnpm
+        run: npm install -g pnpm@9
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -54,8 +55,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Enable corepack
-        run: corepack enable
+      - name: Install pnpm
+        run: npm install -g pnpm@9
 
       - uses: dtolnay/rust-toolchain@stable
 

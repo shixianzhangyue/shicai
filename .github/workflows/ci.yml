@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  PNPM_HOME: ~/.local/share/pnpm
 
 jobs:
   frontend-check:
@@ -20,8 +21,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Enable corepack
-        run: corepack enable
+      - name: Install pnpm
+        run: npm install -g pnpm@9
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -75,8 +76,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Enable corepack
-        run: corepack enable
+      - name: Install pnpm
+        run: npm install -g pnpm@9
 
       - uses: dtolnay/rust-toolchain@stable
 
