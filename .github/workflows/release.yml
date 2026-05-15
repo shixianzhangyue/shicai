@@ -17,8 +17,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
@@ -68,8 +66,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
@@ -102,16 +98,16 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "TalentVault ${{ github.ref_name }}"
           releaseBody: |
-            ## æ‹¾æ‰ TalentVault ${{ github.ref_name }}
+            ## Ê°²Å TalentVault ${{ github.ref_name }}
 
-            æœ¬åœ°æ‹›è˜ç®¡ç†ç³»ç»Ÿ - Tauri 2 + React + TypeScript + SQLite
+            ±¾µØÕĞÆ¸¹ÜÀíÏµÍ³ - Tauri 2 + React + TypeScript + SQLite
 
-            ### ä¸‹è½½
-            - **Windows**: ä¸‹è½½ `.msi` æˆ– `.nsis.zip`
-            - **macOS**: ä¸‹è½½ `.dmg` æˆ– `.app.tar.gz`
-            - **Linux**: ä¸‹è½½ `.deb` æˆ– `.AppImage`
+            ### ÏÂÔØ
+            - **Windows**: ÏÂÔØ `.msi` »ò `.nsis.zip`
+            - **macOS**: ÏÂÔØ `.dmg` »ò `.app.tar.gz`
+            - **Linux**: ÏÂÔØ `.deb` »ò `.AppImage`
 
-            ### å®‰è£…
-            è¯¦è§ [README.md](https://github.com/shixianzhangyue/shicai#readme)
+            ### °²×°
+            Ïê¼û [README.md](https://github.com/shixianzhangyue/shicai#readme)
           releaseDraft: false
           prerelease: false
