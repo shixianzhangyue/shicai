@@ -9,26 +9,23 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # 前端 + Rust 检查（快速失败）
   check:
     name: Pre-check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable && corepack prepare pnpm@9 --activate
 
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: TypeScript check
         run: npx tsc --noEmit
@@ -36,7 +33,6 @@ jobs:
       - name: Rust check
         run: cd src-tauri && cargo check --locked
 
-  # 多平台构建并发布 Release
   build-and-release:
     name: Build & Release (${{ matrix.target }})
     needs: check
@@ -46,25 +42,20 @@ jobs:
         include:
           - platform: ubuntu-22.04
             target: linux
-            artifact-name: linux
           - platform: windows-latest
             target: windows
-            artifact-name: windows
           - platform: macos-latest
             target: macos
-            artifact-name: macos
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable && corepack prepare pnpm@9 --activate
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -85,7 +76,6 @@ jobs:
         with:
           projectPath: ./
           tauriScript: pnpm tauri
-          # 自动创建 Release 并上传产物
           tagName: ${{ github.ref_name }}
           releaseName: "TalentVault ${{ github.ref_name }}"
           releaseBody: |
