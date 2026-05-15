@@ -1,4 +1,4 @@
-use crate::db::pool::DbPool;
+﻿use crate::db::pool::DbPool;
 use crate::validate::{CreateCandidateInput, UpdateCandidateInput, validate_input};
 use chrono::Local;
 use rusqlite::params;
@@ -350,8 +350,9 @@ pub fn update_candidate(
     if let Some(ref v) = input.source {
         param_refs.push(v);
     }
+    let tags_json;
     if let Some(ref v) = input.tags {
-        let tags_json = serde_json::to_string(v).unwrap_or_else(|_| "[]".to_string());
+        tags_json = serde_json::to_string(v).unwrap_or_else(|_| "[]".to_string());
         param_refs.push(&tags_json);
     }
     param_refs.push(&now);
