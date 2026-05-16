@@ -232,6 +232,7 @@ pub fn check_duplicate(
                     let tags_json: String = row.get(9)?;
                     serde_json::from_str(&tags_json).unwrap_or_default()
                 },
+                in_talent_pool: true,
                 deleted_at: row.get(10)?,
                 created_at: row.get(11)?,
                 updated_at: row.get(12)?,

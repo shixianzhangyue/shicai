@@ -1,5 +1,6 @@
 use crate::db::pool::DbPool;
 use crate::services::baidu_ocr::{BaiduOcrClient, CreateOcrConfigInput, OcrConfig, UpdateOcrConfigInput, OcrResult};
+use rusqlite::OptionalExtension;
 
 /// Lists all OCR configurations.
 #[tauri::command]

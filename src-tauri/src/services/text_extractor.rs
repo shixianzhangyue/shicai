@@ -1,5 +1,4 @@
 use crate::services::baidu_ocr::OcrConfig;
-use base64::Engine;
 use std::fs;
 use std::path::Path;
 use thiserror::Error;

@@ -247,7 +247,7 @@ impl BaiduOcrClient {
             .and_then(|v| v.as_i64())
             .unwrap_or(0) as i32;
 
-        let words_result = raw_response
+        let words_result: Vec<WordsResult> = raw_response
             .get("words_result")
             .and_then(|v| v.as_array())
             .map(|arr| {
