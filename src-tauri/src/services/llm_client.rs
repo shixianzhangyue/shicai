@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use thiserror::Error;
 
-use crate::services::prompt::RESUME_PARSE_PROMPT;
+use crate::services::prompt::{RESUME_PARSE_PROMPT, AI_ENHANCE_PROMPT};
 
 const SALT: &[u8] = b"TalentVaultStep24";
 
@@ -140,6 +140,12 @@ pub struct ParsedResume {
     pub work_experiences: Vec<WorkExperience>,
     pub project_experiences: Vec<ProjectExperience>,
     pub raw_text_preview: String,
+    /// Full original text (not truncated) — used by Layer 2 AI enhancement.
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub raw_text_full: String,
+    /// Data source: "ocr", "llm", or "ai_enhanced".
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub parse_source: String,
 }
 
 /// A single work experience entry.
@@ -329,9 +335,186 @@ impl LlmClient {
                 })
                 .unwrap_or_default(),
             raw_text_preview,
+            raw_text_full: text.to_string(),
+            parse_source: "llm".to_string(),
         };
 
         Ok(resume)
+    }
+
+    /// Layer 2: Re-parses only the fields the user marked as inaccurate.
+    /// Returns a full ParsedResume where only the enhanced fields are updated.
+    pub async fn enhance_resume(
+        config: &LlmConfig,
+        text: &str,
+        current_data: &ParsedResume,
+        fields_to_enhance: &[String],
+    ) -> Result<ParsedResume, LlmError> {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(60))
+            .build()
+            .map_err(|e| LlmError::ApiError(e.to_string()))?;
+
+        let url = format!("{}/chat/completions", config.base_url.trim_end_matches('/'));
+        let api_key = deobfuscate_key(&config.api_key);
+
+        // Build the system prompt: template + field names
+        let fields_list = fields_to_enhance.join(", ");
+        let current_data_json = serde_json::to_string_pretty(current_data)
+            .unwrap_or_else(|_| "{}".to_string());
+        let system_prompt = format!(
+            "{}\n\n当前已解析数据：\n{}\n\n需要重新识别的字段：{}",
+            AI_ENHANCE_PROMPT, current_data_json, fields_list
+        );
+
+        let body = json!({
+            "model": config.model_name,
+            "messages": [
+                { "role": "system", "content": system_prompt },
+                { "role": "user", "content": text }
+            ],
+            "temperature": 0.2,
+        });
+
+        let resp = client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let resp_text = resp.text().await?;
+
+        if !status.is_success() {
+            return Err(LlmError::ApiError(format!(
+                "HTTP {}: {}",
+                status.as_u16(),
+                resp_text.chars().take(200).collect::<String>()
+            )));
+        }
+
+        let parsed_resp: serde_json::Value = serde_json::from_str(&resp_text)
+            .map_err(|e| LlmError::ParseError(format!("Invalid JSON response: {}", e)))?;
+
+        let content = parsed_resp
+            .get("choices")
+            .and_then(|c| c.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|choice| choice.get("message"))
+            .and_then(|msg| msg.get("content"))
+            .and_then(|c| c.as_str())
+            .ok_or_else(|| LlmError::ParseError("Missing content in LLM response".to_string()))?;
+
+        let clean_content = content
+            .trim()
+            .trim_start_matches("```json")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim();
+
+        let partial: serde_json::Value = serde_json::from_str(clean_content)
+            .map_err(|e| LlmError::ParseError(format!(
+                "Failed to parse LLM enhance output as JSON: {}. Raw: {}",
+                e,
+                clean_content.chars().take(500).collect::<String>()
+            )))?;
+
+        // Merge: start from current_data, overwrite only the enhanced fields
+        let mut merged = current_data.clone();
+
+        if partial.get("name").is_some() {
+            merged.name = partial.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+        if partial.get("phone").is_some() {
+            merged.phone = partial.get("phone").and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+        if partial.get("email").is_some() {
+            merged.email = partial.get("email").and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+        if partial.get("gender").is_some() {
+            merged.gender = partial.get("gender").and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+        if partial.get("birth_date").is_some() {
+            merged.birth_date = partial.get("birth_date").and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+        if partial.get("current_company").is_some() {
+            merged.current_company = partial.get("current_company").and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+        if partial.get("current_position").is_some() {
+            merged.current_position = partial.get("current_position").and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+        if partial.get("education").is_some() {
+            merged.education = partial.get("education").and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+        if partial.get("years_exp").is_some() {
+            merged.years_exp = partial.get("years_exp").and_then(|v| {
+                if v.is_null() { return None; }
+                v.as_i64().map(|n| n as i32).or_else(|| v.as_str().and_then(|s| s.parse::<i32>().ok()))
+            });
+        }
+        if partial.get("expected_salary").is_some() {
+            merged.expected_salary = partial.get("expected_salary").and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+        if partial.get("expected_city").is_some() {
+            merged.expected_city = partial.get("expected_city").and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+        if partial.get("self_introduction").is_some() {
+            merged.self_introduction = partial.get("self_introduction").and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+        if partial.get("skills").is_some() {
+            merged.skills = partial.get("skills")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default();
+        }
+        if partial.get("work_experiences").is_some() {
+            merged.work_experiences = partial.get("work_experiences")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter().filter_map(|v| {
+                        let company = v.get("company")?.as_str()?;
+                        let position = v.get("position")?.as_str()?;
+                        let duration = v.get("duration")?.as_str()?;
+                        let description = v.get("description").and_then(|d| d.as_str()).map(|s| s.to_string());
+                        Some(WorkExperience {
+                            company: company.to_string(),
+                            position: position.to_string(),
+                            duration: duration.to_string(),
+                            description,
+                        })
+                    }).collect()
+                })
+                .unwrap_or_default();
+        }
+        if partial.get("project_experiences").is_some() {
+            merged.project_experiences = partial.get("project_experiences")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter().filter_map(|v| {
+                        let name = v.get("name")?.as_str()?;
+                        let role = v.get("role").and_then(|r| r.as_str()).map(|s| s.to_string());
+                        let duration = v.get("duration").and_then(|d| d.as_str()).map(|s| s.to_string());
+                        let description = v.get("description").and_then(|d| d.as_str()).map(|s| s.to_string());
+                        let technologies = v.get("technologies")
+                            .and_then(|t| t.as_array())
+                            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                            .unwrap_or_default();
+                        Some(ProjectExperience {
+                            name: name.to_string(),
+                            role,
+                            duration,
+                            description,
+                            technologies,
+                        })
+                    }).collect()
+                })
+                .unwrap_or_default();
+        }
+
+        merged.parse_source = "ai_enhanced".to_string();
+        Ok(merged)
     }
 }
 

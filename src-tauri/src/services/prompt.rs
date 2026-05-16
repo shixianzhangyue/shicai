@@ -35,3 +35,17 @@ pub const RESUME_PARSE_PROMPT: &str = r#"你是一名专业的简历解析助手
 
 简历文本：
 "#;
+
+/// Prompt for Layer 2 AI enhancement — re-parses only the fields the user marked as inaccurate.
+pub const AI_ENHANCE_PROMPT: &str = r#"你是一名专业的简历解析助手。以下是原始简历文本和当前已解析的数据。
+请仅针对【需要重新识别的字段】进行重新提取，其他字段不要返回。
+
+要求：
+1. 只返回 JSON，不要 markdown 代码块，不要其他文字。
+2. 仅返回"需要重新识别的字段"对应的 JSON 字段，其余字段不要包含在输出中。
+3. 支持中英文简历，英文简历请将关键信息翻译为中文。
+4. 如果原始文本中确实找不到某字段的信息，返回 null 或空数组。
+5. 尽可能准确提取信息，不要猜测不存在的内容。
+
+需要重新识别的字段：
+"#;

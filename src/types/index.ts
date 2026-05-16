@@ -1,6 +1,6 @@
 export type ProviderType = 'openai' | 'baidu_ernie' | 'qwen' | 'xunfei' | 'custom';
 
-export type ParseStage = 'idle' | 'selecting' | 'extracting' | 'parsing' | 'preview' | 'filled' | 'error';
+export type ParseStage = 'idle' | 'selecting' | 'extracting' | 'parsing' | 'preview' | 'filled' | 'error' | 'ai_enhancing';
 
 export interface LlmConfig {
   id: number;
@@ -45,6 +45,8 @@ export interface ParsedResume {
   workExperiences: WorkExperience[];
   projectExperiences: ProjectExperience[];
   rawTextPreview: string;
+  rawTextFull: string;
+  parseSource: string;
 }
 
 export type JobStatus = 'draft' | 'open' | 'paused' | 'closed';

@@ -36,7 +36,7 @@ pub struct PaginatedCandidates {
 }
 
 /// Queries candidates with optional multi-dimensional filters and pagination.
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn list_candidates(
     state: tauri::State<DbPool>,
     keyword: Option<String>,

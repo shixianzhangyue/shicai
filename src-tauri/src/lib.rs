@@ -114,6 +114,7 @@ pub fn run() {
             commands::llm_configs::test_llm_connection,
             commands::resume_parser::parse_resume,
             commands::resume_parser::parse_resume_text,
+            commands::resume_parser::parse_resume_enhance,
             commands::ocr_configs::list_ocr_configs,
             commands::ocr_configs::create_ocr_config,
             commands::ocr_configs::update_ocr_config,

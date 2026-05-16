@@ -218,6 +218,16 @@ export const api = {
   resumeParser: {
     parse: (filePath: string) => invoke<ParsedResume>('parse_resume', { file_path: filePath }),
     parseText: (text: string) => invoke<ParsedResume>('parse_resume_text', { text }),
+    parseEnhance: (
+      rawTextFull: string,
+      currentData: ParsedResume,
+      fieldsToEnhance: string[],
+    ) =>
+      invoke<ParsedResume>('parse_resume_enhance', {
+        raw_text_full: rawTextFull,
+        current_data: currentData,
+        fields_to_enhance: fieldsToEnhance,
+      }),
   },
   ocrConfigs: {
     list: () => invoke<OcrConfig[]>('list_ocr_configs'),

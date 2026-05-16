@@ -207,7 +207,7 @@ pub async fn get_default_ocr_config(
 }
 
 /// Tests OCR connection with the given configuration.
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn test_ocr_connection(
     _state: tauri::State<'_, DbPool>,
     api_key: String,
@@ -219,7 +219,7 @@ pub async fn test_ocr_connection(
 }
 
 /// Performs OCR on an image using the default configuration.
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn ocr_image(
     state: tauri::State<'_, DbPool>,
     image_base64: String,
