@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { Job, JobStatus, JobTemplate, PipelineTemplate } from '@/types';
+import type { Job, JobStatus, JobTemplate } from '@/types';
 import { useJobStore } from '@/stores/jobStore';
 import { useTagStore } from '@/stores/tagStore';
 import { api } from '@/lib/api';
@@ -16,7 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import TagPicker from '@/components/ui/TagPicker';
-import { Save, FileText, Loader2, Workflow } from 'lucide-react';
+import { Save, FileText, Loader2 } from 'lucide-react';
 
 interface JobFormProps {
   open: boolean;
@@ -44,6 +44,7 @@ function JobForm({ open, onOpenChange, editingJob }: JobFormProps) {
   const [requirements, setRequirements] = useState('');
   const [status, setStatus] = useState<JobStatus>('draft');
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [headcount, setHeadcount] = useState('1');
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -53,12 +54,6 @@ function JobForm({ open, onOpenChange, editingJob }: JobFormProps) {
   const [templateName, setTemplateName] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [saveTemplateError, setSaveTemplateError] = useState('');
-
-  // Pipeline template state
-  const [pipelineTemplates, setPipelineTemplates] = useState<PipelineTemplate[]>([]);
-  const [selectedPipelineTemplateId, setSelectedPipelineTemplateId] = useState<string>('');
-  const [pipelineTemplatePreview, setPipelineTemplatePreview] = useState<string[]>([]);
-  const [loadingPipelineTemplates, setLoadingPipelineTemplates] = useState(false);
 
   const isEditing = !!editingJob;
 
@@ -74,8 +69,7 @@ function JobForm({ open, onOpenChange, editingJob }: JobFormProps) {
         setRequirements(editingJob.requirements ?? '');
         setStatus(editingJob.status);
         setSelectedTagIds(editingJob.tags ?? []);
-        setSelectedPipelineTemplateId('');
-        setPipelineTemplatePreview([]);
+        setHeadcount(editingJob.headcount?.toString() ?? '1');
       } else {
         setTitle('');
         setDepartment('');
@@ -85,40 +79,13 @@ function JobForm({ open, onOpenChange, editingJob }: JobFormProps) {
         setRequirements('');
         setStatus('draft');
         setSelectedTagIds([]);
-        setSelectedPipelineTemplateId('');
-        setPipelineTemplatePreview([]);
+        setHeadcount('1');
       }
       setFormError('');
       setTemplateName('');
       setSaveTemplateError('');
-
-      // Load pipeline templates for new jobs
-      if (!editingJob) {
-        setLoadingPipelineTemplates(true);
-        api.pipelineTemplates
-          .list()
-          .then((list) => setPipelineTemplates(list))
-          .catch(() => {})
-          .finally(() => setLoadingPipelineTemplates(false));
-      }
     }
   }, [open, editingJob, fetchTags]);
-
-  useEffect(() => {
-    if (!selectedPipelineTemplateId) {
-      setPipelineTemplatePreview([]);
-      return;
-    }
-    const tpl = pipelineTemplates.find((t) => t.id === selectedPipelineTemplateId);
-    if (tpl) {
-      try {
-        const stages = JSON.parse(tpl.stagesJson) as Array<{ name: string }>;
-        setPipelineTemplatePreview(stages.map((s) => s.name));
-      } catch {
-        setPipelineTemplatePreview([]);
-      }
-    }
-  }, [selectedPipelineTemplateId, pipelineTemplates]);
 
   const validate = (): boolean => {
     const t = title.trim();
@@ -161,27 +128,13 @@ function JobForm({ open, onOpenChange, editingJob }: JobFormProps) {
         requirements: requirements.trim() || null,
         status,
         tags: selectedTagIds,
+        headcount: headcount ? parseInt(headcount, 10) : 1,
       };
       if (isEditing && editingJob) {
         await updateJob(editingJob.id, payload);
       } else {
         const job = await createJob(payload);
-        if (selectedPipelineTemplateId) {
-          const tpl = pipelineTemplates.find((t) => t.id === selectedPipelineTemplateId);
-          if (tpl) {
-            try {
-              const stages = JSON.parse(tpl.stagesJson) as Array<{ name: string; sortOrder?: number }>;
-              for (let i = 0; i < stages.length; i++) {
-                await api.pipeline.createStage(job.id, stages[i].name, stages[i].sortOrder ?? i);
-              }
-            } catch {
-              // Fallback to default stages if template parsing fails
-              await api.pipeline.initDefaultStages(job.id);
-            }
-          }
-        } else {
-          await api.pipeline.initDefaultStages(job.id);
-        }
+        await api.pipeline.initDefaultStages(job.id);
       }
       onOpenChange(false);
     } catch (err) {
@@ -280,8 +233,8 @@ function JobForm({ open, onOpenChange, editingJob }: JobFormProps) {
               />
             </div>
 
-            {/* Salary */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Salary and Headcount */}
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-[#e2e8f0]">
                   薪资下限
@@ -310,6 +263,21 @@ function JobForm({ open, onOpenChange, editingJob }: JobFormProps) {
                   }}
                   placeholder="例如 25"
                   min={0}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-[#e2e8f0]">
+                  招聘人数
+                </label>
+                <Input
+                  type="number"
+                  value={headcount}
+                  onChange={(e) => {
+                    setHeadcount(e.target.value);
+                    if (formError) setFormError('');
+                  }}
+                  placeholder="1"
+                  min={1}
                 />
               </div>
             </div>
@@ -372,44 +340,6 @@ function JobForm({ open, onOpenChange, editingJob }: JobFormProps) {
                 placeholder="选择标签..."
               />
             </div>
-
-            {/* Pipeline Template (new mode only) */}
-            {!isEditing && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-[#e2e8f0] flex items-center gap-1">
-                  <Workflow className="w-3.5 h-3.5" />
-                  流程模板
-                </label>
-                <select
-                  value={selectedPipelineTemplateId}
-                  onChange={(e) => setSelectedPipelineTemplateId(e.target.value)}
-                  disabled={loadingPipelineTemplates}
-                  className="flex h-10 w-full rounded-md border border-[#2a2d35] bg-[#0f1117] px-3 py-2 text-sm text-[#e2e8f0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6] focus-visible:ring-offset-2 disabled:opacity-50"
-                >
-                  <option value="">使用默认流程</option>
-                  {pipelineTemplates.map((tpl) => (
-                    <option key={tpl.id} value={tpl.id}>
-                      {tpl.name}
-                    </option>
-                  ))}
-                </select>
-                {loadingPipelineTemplates && (
-                  <p className="text-xs text-[#64748b]">加载模板中...</p>
-                )}
-                {pipelineTemplatePreview.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-1">
-                    {pipelineTemplatePreview.map((name, idx) => (
-                      <span
-                        key={idx}
-                        className="text-xs px-2 py-0.5 rounded bg-[#3b82f6]/10 text-[#3b82f6]"
-                      >
-                        {name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
 
             {formError && (
               <p className="text-xs text-red-400">{formError}</p>

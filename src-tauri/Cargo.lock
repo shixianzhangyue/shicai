@@ -4041,6 +4041,7 @@ dependencies = [
 name = "talent-vault"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "docx-rs",
  "log",
@@ -4060,6 +4061,7 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-shell",
  "thiserror 1.0.69",
+ "tokio",
  "validator",
  "walkdir",
  "zip 2.4.2",

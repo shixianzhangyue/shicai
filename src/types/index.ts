@@ -20,16 +20,30 @@ export interface WorkExperience {
   description?: string;
 }
 
+export interface ProjectExperience {
+  name: string;
+  role?: string;
+  duration?: string;
+  description?: string;
+  technologies: string[];
+}
+
 export interface ParsedResume {
   name: string | null;
   phone: string | null;
   email: string | null;
+  gender: string | null;
+  birthDate: string | null;
   currentCompany: string | null;
   currentPosition: string | null;
   education: string | null;
   yearsExp: number | null;
+  expectedSalary: string | null;
+  expectedCity: string | null;
+  selfIntroduction: string | null;
   skills: string[];
   workExperiences: WorkExperience[];
+  projectExperiences: ProjectExperience[];
   rawTextPreview: string;
 }
 
@@ -75,6 +89,7 @@ export interface Job {
   requirements: string | null;
   status: JobStatus;
   tags: string[];
+  headcount: number;
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -91,9 +106,32 @@ export interface Candidate {
   yearsExp: number | null;
   source: CandidateSource;
   tags: string[];
+  inTalentPool: boolean;
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PaginatedCandidates {
+  items: Candidate[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface CandidateListParams {
+  keyword?: string;
+  tags?: string[];
+  education?: string;
+  minExp?: number;
+  maxExp?: number;
+  source?: string;
+  inTalentPool?: boolean;
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface CandidateSearchIndex {
@@ -164,13 +202,6 @@ export interface JobTemplate {
   createdAt: string;
 }
 
-export interface PipelineTemplate {
-  id: string;
-  name: string;
-  stagesJson: string;
-  createdAt: string;
-}
-
 export interface ImportRow {
   name: string;
   phone?: string;
@@ -194,6 +225,8 @@ export interface OverviewStats {
   totalCandidates: number;
   talentPoolSize: number;
   todayFollowUps: number;
+  totalHeadcount: number;
+  hiredCount: number;
 }
 
 export interface FunnelData {
@@ -242,4 +275,38 @@ export interface TalentEntry {
   originalJobId: string | null;
   originalJobTitle: string | null;
   pooledAt: string;
+}
+
+export interface OcrConfig {
+  id: number;
+  provider: string;
+  apiKey: string;
+  secretKey: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateOcrConfigInput {
+  provider: string;
+  apiKey: string;
+  secretKey: string;
+}
+
+export interface UpdateOcrConfigInput {
+  provider?: string;
+  apiKey?: string;
+  secretKey?: string;
+  isDefault?: boolean;
+}
+
+export interface WordsResult {
+  words: string;
+}
+
+export interface OcrResult {
+  text: string;
+  wordsResult: WordsResult[];
+  wordsResultNum: number;
+  rawResponse: Record<string, unknown>;
 }

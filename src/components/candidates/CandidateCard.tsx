@@ -1,15 +1,16 @@
 import type { Candidate } from '@/types';
 import { useTagStore } from '@/stores/tagStore';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, Archive } from 'lucide-react';
 
 interface CandidateCardProps {
   candidate: Candidate;
   onEdit: (candidate: Candidate) => void;
   onDelete: (candidate: Candidate) => void;
   onClick?: (candidate: Candidate) => void;
+  showTalentPoolBadge?: boolean;
 }
 
-function CandidateCard({ candidate, onEdit, onDelete, onClick }: CandidateCardProps) {
+function CandidateCard({ candidate, onEdit, onDelete, onClick, showTalentPoolBadge }: CandidateCardProps) {
   const tags = useTagStore((s) => s.tags);
   const candidateTags = tags.filter((t) => candidate.tags.includes(t.id));
 
@@ -24,6 +25,16 @@ function CandidateCard({ candidate, onEdit, onDelete, onClick }: CandidateCardPr
       onClick={() => onClick?.(candidate)}
       className={`relative flex flex-col rounded-xl border border-[#2a2d35] bg-[#1a1d24] p-5 transition-colors hover:border-[#3b82f6]/30 ${onClick ? 'cursor-pointer' : ''}`}
     >
+      {/* Talent Pool Badge */}
+      {showTalentPoolBadge && candidate.inTalentPool && (
+        <div className="absolute top-3 right-3">
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-[#8b5cf6]/20 text-[#8b5cf6] border border-[#8b5cf6]/30">
+            <Archive className="w-3 h-3" />
+            人才池
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <h3 className="text-base font-semibold text-[#e2e8f0] line-clamp-1" title={candidate.name}>

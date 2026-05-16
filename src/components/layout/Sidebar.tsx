@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Bell,
-  FileText,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { api } from "@/lib/api";
@@ -22,8 +21,6 @@ interface NavItem {
 const navItems: NavItem[] = [
   { path: "/dashboard", label: "仪表盘", icon: LayoutDashboard },
   { path: "/jobs", label: "职位管理", icon: Briefcase },
-  { path: "/job-templates", label: "职位模板", icon: FileText },
-  { path: "/candidates", label: "候选人", icon: Users },
   { path: "/talent-pool", label: "人才库", icon: Users },
   { path: "/settings", label: "设置", icon: Settings },
 ];

@@ -15,6 +15,7 @@ import { useTagStore } from "@/stores/tagStore";
 import BackupRestore from "@/components/settings/BackupRestore";
 import ExportConfig from "@/components/settings/ExportConfig";
 import LlmConfigPanel from "@/components/settings/LlmConfigPanel";
+import OcrConfigPanel from "@/components/settings/OcrConfigPanel";
 import { Tag, Pencil, Trash2, Plus, AlertTriangle, Download } from "lucide-react";
 
 const PRESET_COLORS = [
@@ -194,15 +195,28 @@ function Settings() {
           </div>
         </section>
 
-        {/* LLM Config Section */}
+        {/* Resume Parsing Config Section */}
         <section>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-semibold text-[#e2e8f0]">LLM 配置</h2>
-              <p className="text-sm text-[#94a3b8]">配置大语言模型用于智能简历解析</p>
+              <h2 className="text-lg font-semibold text-[#e2e8f0]">简历解析配置</h2>
+              <p className="text-sm text-[#94a3b8]">配置 LLM 智能解析和 OCR 图片识别</p>
             </div>
           </div>
-          <LlmConfigPanel />
+
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-medium text-[#e2e8f0] mb-3">LLM 配置</h3>
+              <p className="text-xs text-[#94a3b8] mb-3">用于智能解析简历文本，提取结构化信息</p>
+              <LlmConfigPanel />
+            </div>
+
+            <div className="border-t border-[#2a2d35] pt-6">
+              <h3 className="text-sm font-medium text-[#e2e8f0] mb-3">OCR 配置（可选）</h3>
+              <p className="text-xs text-[#94a3b8] mb-3">用于识别图片型简历（扫描件PDF、图片文件）。未配置时，图片型简历将无法解析。</p>
+              <OcrConfigPanel />
+            </div>
+          </div>
         </section>
       </div>
 

@@ -15,6 +15,10 @@ pub struct OverviewStats {
     pub talent_pool_size: i64,
     /// Number of follow-ups scheduled for today or earlier.
     pub today_follow_ups: i64,
+    /// Total headcount across all open jobs.
+    pub total_headcount: i64,
+    /// Number of candidates that reached the final pipeline stage.
+    pub hired_count: i64,
 }
 
 /// Funnel data item returned by `get_funnel_data`.
@@ -96,11 +100,46 @@ pub fn get_overview_stats(state: tauri::State<DbPool>) -> Result<OverviewStats, 
             msg
         })?;
 
+    // 5. Total headcount across open jobs
+    let total_headcount: i64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(headcount), 0) FROM jobs WHERE status = 'open' AND deleted_at IS NULL",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| {
+            let msg = format!("Failed to count total headcount: {}", e);
+            log::error!("{}", msg);
+            msg
+        })?;
+
+    // 6. Hired count — candidates in the final pipeline stage of each job
+    let hired_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM candidate_pipeline cp
+             JOIN pipeline_stages ps ON cp.current_stage_id = ps.id
+             WHERE cp.status = 'active'
+               AND ps.sort_order = (
+                   SELECT MAX(ps2.sort_order)
+                   FROM pipeline_stages ps2
+                   WHERE ps2.job_id = ps.job_id
+               )",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| {
+            let msg = format!("Failed to count hired candidates: {}", e);
+            log::error!("{}", msg);
+            msg
+        })?;
+
     Ok(OverviewStats {
         open_jobs,
         total_candidates,
         talent_pool_size,
         today_follow_ups,
+        total_headcount,
+        hired_count,
     })
 }
 

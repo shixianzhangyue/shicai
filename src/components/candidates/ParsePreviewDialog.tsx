@@ -87,7 +87,7 @@ function ParsePreviewDialog({ open, onOpenChange, data, onConfirm }: ParsePrevie
                 onChange={(e) => handleChange('name', e.target.value || null)}
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <div className="space-y-1">
                 <Label>手机号</Label>
                 <Input
@@ -102,8 +102,24 @@ function ParsePreviewDialog({ open, onOpenChange, data, onConfirm }: ParsePrevie
                   onChange={(e) => handleChange('email', e.target.value || null)}
                 />
               </div>
+              <div className="space-y-1">
+                <Label>性别</Label>
+                <Input
+                  value={currentData.gender ?? ''}
+                  onChange={(e) => handleChange('gender', e.target.value || null)}
+                  placeholder="男/女"
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <Label>出生日期</Label>
+                <Input
+                  value={currentData.birthDate ?? ''}
+                  onChange={(e) => handleChange('birthDate', e.target.value || null)}
+                  placeholder="1990-01"
+                />
+              </div>
               <div className="space-y-1">
                 <Label>当前公司</Label>
                 <Input
@@ -119,7 +135,7 @@ function ParsePreviewDialog({ open, onOpenChange, data, onConfirm }: ParsePrevie
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <div className="space-y-1">
                 <Label>学历</Label>
                 <Input
@@ -138,6 +154,30 @@ function ParsePreviewDialog({ open, onOpenChange, data, onConfirm }: ParsePrevie
                   }}
                 />
               </div>
+              <div className="space-y-1">
+                <Label>期望薪资</Label>
+                <Input
+                  value={currentData.expectedSalary ?? ''}
+                  onChange={(e) => handleChange('expectedSalary', e.target.value || null)}
+                  placeholder="15-20k"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>期望城市</Label>
+                <Input
+                  value={currentData.expectedCity ?? ''}
+                  onChange={(e) => handleChange('expectedCity', e.target.value || null)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>自我介绍</Label>
+              <Textarea
+                value={currentData.selfIntroduction ?? ''}
+                onChange={(e) => handleChange('selfIntroduction', e.target.value || null)}
+                className="text-xs bg-[#0f1117]"
+                rows={3}
+              />
             </div>
             <div className="space-y-1">
               <Label>技能（逗号分隔）</Label>
@@ -166,6 +206,37 @@ function ParsePreviewDialog({ open, onOpenChange, data, onConfirm }: ParsePrevie
                       <div className="text-[#94a3b8]">{we.duration}</div>
                       {we.description && (
                         <div className="text-[#94a3b8] line-clamp-2">{we.description}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <Label>项目经历</Label>
+              {currentData.projectExperiences.length === 0 ? (
+                <p className="text-xs text-[#94a3b8]">未提取到项目经历</p>
+              ) : (
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  {currentData.projectExperiences.map((pe, idx) => (
+                    <div key={idx} className="rounded-md border border-[#2a2d35] bg-[#0f1117] p-2 text-xs space-y-1">
+                      <div className="font-medium text-[#e2e8f0]">
+                        {pe.name}
+                        {pe.role && <span className="text-[#94a3b8]"> · {pe.role}</span>}
+                      </div>
+                      {pe.duration && <div className="text-[#94a3b8]">{pe.duration}</div>}
+                      {pe.description && (
+                        <div className="text-[#94a3b8] line-clamp-2">{pe.description}</div>
+                      )}
+                      {pe.technologies.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {pe.technologies.map((tech, i) => (
+                            <span key={i} className="px-1.5 py-0.5 rounded bg-[#2a2d35] text-[#94a3b8] text-[10px]">
+                              {tech}
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
                   ))}

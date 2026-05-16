@@ -18,6 +18,7 @@ pub struct Job {
     pub requirements: Option<String>,
     pub status: String,
     pub tags: Vec<String>,
+    pub headcount: i32,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -33,7 +34,7 @@ pub fn list_jobs(state: tauri::State<DbPool>) -> Result<Vec<Job>, String> {
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, title, department, salary_min, salary_max, description, requirements, status, tags, created_at, updated_at FROM jobs WHERE deleted_at IS NULL ORDER BY created_at DESC",
+            "SELECT id, title, department, salary_min, salary_max, description, requirements, status, tags, headcount, created_at, updated_at FROM jobs WHERE deleted_at IS NULL ORDER BY created_at DESC",
         )
         .map_err(|e| {
             let msg = format!("Failed to prepare list_jobs query: {}", e);
@@ -55,8 +56,9 @@ pub fn list_jobs(state: tauri::State<DbPool>) -> Result<Vec<Job>, String> {
                 requirements: row.get(6)?,
                 status: row.get(7)?,
                 tags,
-                created_at: row.get(9)?,
-                updated_at: row.get(10)?,
+                headcount: row.get(9)?,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
             })
         })
         .map_err(|e| {
@@ -85,7 +87,7 @@ pub fn get_job(state: tauri::State<DbPool>, id: String) -> Result<Job, String> {
 
     let job = conn
         .query_row(
-            "SELECT id, title, department, salary_min, salary_max, description, requirements, status, tags, created_at, updated_at FROM jobs WHERE id = ?1 AND deleted_at IS NULL",
+            "SELECT id, title, department, salary_min, salary_max, description, requirements, status, tags, headcount, created_at, updated_at FROM jobs WHERE id = ?1 AND deleted_at IS NULL",
             params![&id],
             |row| {
                 let tags_str: String = row.get(8)?;
@@ -100,8 +102,9 @@ pub fn get_job(state: tauri::State<DbPool>, id: String) -> Result<Job, String> {
                     requirements: row.get(6)?,
                     status: row.get(7)?,
                     tags,
-                    created_at: row.get(9)?,
-                    updated_at: row.get(10)?,
+                    headcount: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
                 })
             },
         )
@@ -132,9 +135,10 @@ pub fn create_job(
     let now = Local::now().to_rfc3339();
     let tags_json = serde_json::to_string(&input.tags)
         .unwrap_or_else(|_| "[]".to_string());
+    let headcount = input.headcount.unwrap_or(1);
 
     conn.execute(
-        "INSERT INTO jobs (id, title, department, salary_min, salary_max, description, requirements, status, tags, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        "INSERT INTO jobs (id, title, department, salary_min, salary_max, description, requirements, status, tags, headcount, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             &id,
             &input.title,
@@ -145,6 +149,7 @@ pub fn create_job(
             &input.requirements,
             &input.status,
             &tags_json,
+            &headcount,
             &now,
             &now,
         ],
@@ -167,6 +172,7 @@ pub fn create_job(
         requirements: input.requirements,
         status: input.status,
         tags: input.tags,
+        headcount,
         created_at: now.clone(),
         updated_at: now,
     })
@@ -213,6 +219,9 @@ pub fn update_job(
     if input.tags.is_some() {
         updates.push("tags = ?".to_string());
     }
+    if input.headcount.is_some() {
+        updates.push("headcount = ?".to_string());
+    }
 
     if updates.is_empty() {
         return Err("No fields to update".to_string());
@@ -251,6 +260,9 @@ pub fn update_job(
         tags_json = serde_json::to_string(v).unwrap_or_else(|_| "[]".to_string());
         param_refs.push(&tags_json);
     }
+    if let Some(ref v) = input.headcount {
+        param_refs.push(v);
+    }
     param_refs.push(&now);
     param_refs.push(&id);
 
@@ -263,7 +275,7 @@ pub fn update_job(
     // Fetch the updated job.
     let job = conn
         .query_row(
-            "SELECT id, title, department, salary_min, salary_max, description, requirements, status, tags, created_at, updated_at FROM jobs WHERE id = ?1 AND deleted_at IS NULL",
+            "SELECT id, title, department, salary_min, salary_max, description, requirements, status, tags, headcount, created_at, updated_at FROM jobs WHERE id = ?1 AND deleted_at IS NULL",
             params![&id],
             |row| {
                 let tags_str: String = row.get(8)?;
@@ -278,8 +290,9 @@ pub fn update_job(
                     requirements: row.get(6)?,
                     status: row.get(7)?,
                     tags,
-                    created_at: row.get(9)?,
-                    updated_at: row.get(10)?,
+                    headcount: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
                 })
             },
         )
@@ -305,7 +318,7 @@ pub fn delete_job(state: tauri::State<DbPool>, id: String) -> Result<(), String>
     // Fetch the record to snapshot for the audit log.
     let job = conn
         .query_row(
-            "SELECT id, title, department, salary_min, salary_max, description, requirements, status, tags, created_at, updated_at FROM jobs WHERE id = ?1 AND deleted_at IS NULL",
+            "SELECT id, title, department, salary_min, salary_max, description, requirements, status, tags, headcount, created_at, updated_at FROM jobs WHERE id = ?1 AND deleted_at IS NULL",
             params![&id],
             |row| {
                 let tags_str: String = row.get(8)?;
@@ -320,8 +333,9 @@ pub fn delete_job(state: tauri::State<DbPool>, id: String) -> Result<(), String>
                     requirements: row.get(6)?,
                     status: row.get(7)?,
                     tags,
-                    created_at: row.get(9)?,
-                    updated_at: row.get(10)?,
+                    headcount: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
                 })
             },
         )
@@ -370,7 +384,7 @@ pub fn duplicate_job(state: tauri::State<DbPool>, id: String) -> Result<Job, Str
 
     let original = conn
         .query_row(
-            "SELECT id, title, department, salary_min, salary_max, description, requirements, status, tags, created_at, updated_at FROM jobs WHERE id = ?1 AND deleted_at IS NULL",
+            "SELECT id, title, department, salary_min, salary_max, description, requirements, status, tags, headcount, created_at, updated_at FROM jobs WHERE id = ?1 AND deleted_at IS NULL",
             params![&id],
             |row| {
                 let tags_str: String = row.get(8)?;
@@ -385,8 +399,9 @@ pub fn duplicate_job(state: tauri::State<DbPool>, id: String) -> Result<Job, Str
                     requirements: row.get(6)?,
                     status: row.get(7)?,
                     tags,
-                    created_at: row.get(9)?,
-                    updated_at: row.get(10)?,
+                    headcount: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
                 })
             },
         )
@@ -402,7 +417,7 @@ pub fn duplicate_job(state: tauri::State<DbPool>, id: String) -> Result<Job, Str
     let tags_json = serde_json::to_string(&original.tags).unwrap_or_else(|_| "[]".to_string());
 
     conn.execute(
-        "INSERT INTO jobs (id, title, department, salary_min, salary_max, description, requirements, status, tags, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        "INSERT INTO jobs (id, title, department, salary_min, salary_max, description, requirements, status, tags, headcount, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             &new_id,
             &new_title,
@@ -413,6 +428,7 @@ pub fn duplicate_job(state: tauri::State<DbPool>, id: String) -> Result<Job, Str
             &original.requirements,
             "draft",
             &tags_json,
+            &original.headcount,
             &now,
             &now,
         ],
@@ -435,6 +451,7 @@ pub fn duplicate_job(state: tauri::State<DbPool>, id: String) -> Result<Job, Str
         requirements: original.requirements,
         status: "draft".to_string(),
         tags: original.tags,
+        headcount: original.headcount,
         created_at: now.clone(),
         updated_at: now,
     })

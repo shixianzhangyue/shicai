@@ -15,6 +15,8 @@ pub struct CreateJobInput {
     pub requirements: Option<String>,
     pub status: String,
     pub tags: Vec<String>,
+    #[validate(range(min = 1, message = "招聘人数至少为1"))]
+    pub headcount: Option<i32>,
 }
 
 /// Input validation for updating a job.
@@ -31,6 +33,8 @@ pub struct UpdateJobInput {
     pub requirements: Option<String>,
     pub status: Option<String>,
     pub tags: Option<Vec<String>>,
+    #[validate(range(min = 1, message = "招聘人数至少为1"))]
+    pub headcount: Option<i32>,
 }
 
 /// Input validation for creating a new candidate.

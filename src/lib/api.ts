@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Job, Tag, JobTemplate, Candidate, PipelineStage, PipelineEntry, CandidatePipeline, FollowUp, FollowUpWithCandidate, TalentEntry, RelationWithCandidate, CandidateRelation, OverviewStats, FunnelData, ExportableFieldMeta, ExportResult, ExportConfig, PipelineTemplate, LlmConfig, ParsedResume } from '@/types';
+import type { Job, Tag, JobTemplate, Candidate, PaginatedCandidates, CandidateListParams, PipelineStage, PipelineEntry, CandidatePipeline, FollowUp, FollowUpWithCandidate, TalentEntry, RelationWithCandidate, CandidateRelation, OverviewStats, FunnelData, ExportableFieldMeta, ExportResult, ExportConfig, LlmConfig, ParsedResume, OcrConfig, CreateOcrConfigInput, UpdateOcrConfigInput, OcrResult } from '@/types';
 
 function handleError(error: unknown): string {
   const msg = error instanceof Error ? error.message : String(error);
@@ -53,6 +53,7 @@ function mapCreateJobInput(
     requirements: input.requirements,
     status: input.status,
     tags: input.tags,
+    headcount: input.headcount,
   };
 }
 
@@ -69,6 +70,7 @@ function mapUpdateJobInput(
   if (input.requirements !== undefined) mapped.requirements = input.requirements;
   if (input.status !== undefined) mapped.status = input.status;
   if (input.tags !== undefined) mapped.tags = input.tags;
+  if (input.headcount !== undefined) mapped.headcount = input.headcount;
   return mapped;
 }
 
@@ -82,19 +84,23 @@ export const api = {
     delete: (id: string) => invoke<void>('delete_tag', { id }),
   },
   candidates: {
-    list: (filters?: {
-      keyword?: string;
-      tags?: string[];
-      education?: string;
-      minExp?: number;
-      maxExp?: number;
-      source?: string;
-      includeDeleted?: boolean;
-    }) => invoke<Candidate[]>('list_candidates', filters || {}),
+    list: (params?: CandidateListParams) => invoke<PaginatedCandidates>('list_candidates', {
+      keyword: params?.keyword,
+      tags: params?.tags,
+      education: params?.education,
+      min_exp: params?.minExp,
+      max_exp: params?.maxExp,
+      source: params?.source,
+      in_talent_pool: params?.inTalentPool,
+      page: params?.page,
+      page_size: params?.pageSize,
+      sort_by: params?.sortBy,
+      sort_order: params?.sortOrder,
+    }),
     get: (id: string) => invoke<Candidate>('get_candidate', { id }),
-    create: (input: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>) =>
+    create: (input: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'inTalentPool'>) =>
       invoke<Candidate>('create_candidate', { input: mapCreateCandidateInput(input) }),
-    update: (id: string, input: Partial<Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>>) =>
+    update: (id: string, input: Partial<Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'inTalentPool'>>) =>
       invoke<Candidate>('update_candidate', { id, input: mapUpdateCandidateInput(input) }),
     delete: (id: string) => invoke<void>('delete_candidate', { id }),
   },
@@ -193,12 +199,6 @@ export const api = {
     import: (path: string) => invoke<string>('import_backup', { zipPath: path }),
     rollback: () => invoke<string>('rollback_backup'),
   },
-  pipelineTemplates: {
-    list: () => invoke<PipelineTemplate[]>('list_pipeline_templates'),
-    create: (name: string, stagesJson: string) =>
-      invoke<PipelineTemplate>('create_pipeline_template', { name, stagesJson }),
-    delete: (id: string) => invoke<void>('delete_pipeline_template', { id }),
-  },
   llmConfigs: {
     list: () => invoke<LlmConfig[]>('list_llm_configs'),
     create: (input: Omit<LlmConfig, 'id' | 'createdAt' | 'updatedAt'>) =>
@@ -217,6 +217,24 @@ export const api = {
   },
   resumeParser: {
     parse: (filePath: string) => invoke<ParsedResume>('parse_resume', { file_path: filePath }),
+    parseText: (text: string) => invoke<ParsedResume>('parse_resume_text', { text }),
+  },
+  ocrConfigs: {
+    list: () => invoke<OcrConfig[]>('list_ocr_configs'),
+    create: (input: CreateOcrConfigInput) =>
+      invoke<OcrConfig>('create_ocr_config', { input }),
+    update: (id: number, input: UpdateOcrConfigInput) =>
+      invoke<OcrConfig>('update_ocr_config', { id, input }),
+    delete: (id: number) => invoke<void>('delete_ocr_config', { id }),
+    getDefault: () => invoke<OcrConfig | null>('get_default_ocr_config'),
+    test: (config: { provider: string; apiKey: string; secretKey: string }) =>
+      invoke<string>('test_ocr_connection', {
+        id: 0, // Will be ignored for test
+        provider: config.provider,
+        api_key: config.apiKey,
+        secret_key: config.secretKey,
+      }),
+    recognize: (imageBase64: string) => invoke<OcrResult>('ocr_image', { image_base64: imageBase64 }),
   },
 };
 

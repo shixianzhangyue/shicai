@@ -2,17 +2,28 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import PageLayout from '@/components/layout/PageLayout';
 import { useJobStore } from '@/stores/jobStore';
 import { useTagStore } from '@/stores/tagStore';
-import type { Job, JobStatus } from '@/types';
+import type { Job, JobStatus, JobTemplate } from '@/types';
 import JobCard from '@/components/jobs/JobCard';
 import JobForm from '@/components/jobs/JobForm';
 import DeleteJobDialog from '@/components/jobs/DeleteJobDialog';
+import TemplateManager from '@/components/jobs/TemplateManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Briefcase,
   Plus,
   Search,
   Loader2,
+  FileText,
+  Settings,
 } from 'lucide-react';
 
 const STATUS_OPTIONS: { value: JobStatus | ''; label: string }[] = [
@@ -45,6 +56,7 @@ function Jobs() {
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingJob, setDeletingJob] = useState<Job | null>(null);
+  const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
 
   useEffect(() => {
     fetchJobs();
@@ -147,14 +159,32 @@ function Jobs() {
           </select>
         </div>
 
-        <Button
-          onClick={openCreateForm}
-          className="inline-flex items-center gap-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white"
-          size="sm"
-        >
-          <Plus className="w-4 h-4" />
-          新建职位
-        </Button>
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="inline-flex items-center gap-2">
+                <Settings className="w-4 h-4" />
+                模板管理
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>职位模板</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setTemplateManagerOpen(true)}>
+                <FileText className="mr-2 h-4 w-4" />
+                管理模板
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            onClick={openCreateForm}
+            className="inline-flex items-center gap-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white"
+            size="sm"
+          >
+            <Plus className="w-4 h-4" />
+            新建职位
+          </Button>
+        </div>
       </div>
 
       {/* Error message */}
@@ -228,6 +258,12 @@ function Jobs() {
         onOpenChange={setDeleteDialogOpen}
         job={deletingJob}
         onConfirm={handleConfirmDelete}
+      />
+
+      {/* Template Manager Dialog */}
+      <TemplateManager
+        open={templateManagerOpen}
+        onOpenChange={setTemplateManagerOpen}
       />
     </PageLayout>
   );

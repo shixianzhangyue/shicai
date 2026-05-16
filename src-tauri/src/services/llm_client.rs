@@ -127,12 +127,18 @@ pub struct ParsedResume {
     pub name: Option<String>,
     pub phone: Option<String>,
     pub email: Option<String>,
+    pub gender: Option<String>,
+    pub birth_date: Option<String>,
     pub current_company: Option<String>,
     pub current_position: Option<String>,
     pub education: Option<String>,
     pub years_exp: Option<i32>,
+    pub expected_salary: Option<String>,
+    pub expected_city: Option<String>,
+    pub self_introduction: Option<String>,
     pub skills: Vec<String>,
     pub work_experiences: Vec<WorkExperience>,
+    pub project_experiences: Vec<ProjectExperience>,
     pub raw_text_preview: String,
 }
 
@@ -144,6 +150,17 @@ pub struct WorkExperience {
     pub position: String,
     pub duration: String,
     pub description: Option<String>,
+}
+
+/// A single project experience entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectExperience {
+    pub name: String,
+    pub role: Option<String>,
+    pub duration: Option<String>,
+    pub description: Option<String>,
+    pub technologies: Vec<String>,
 }
 
 /// Client for interacting with LLM APIs.
@@ -256,6 +273,8 @@ impl LlmClient {
             name: parsed.get("name").and_then(|v| v.as_str()).map(|s| s.to_string()),
             phone: parsed.get("phone").and_then(|v| v.as_str()).map(|s| s.to_string()),
             email: parsed.get("email").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            gender: parsed.get("gender").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            birth_date: parsed.get("birth_date").and_then(|v| v.as_str()).map(|s| s.to_string()),
             current_company: parsed.get("current_company").and_then(|v| v.as_str()).map(|s| s.to_string()),
             current_position: parsed.get("current_position").and_then(|v| v.as_str()).map(|s| s.to_string()),
             education: parsed.get("education").and_then(|v| v.as_str()).map(|s| s.to_string()),
@@ -263,6 +282,9 @@ impl LlmClient {
                 if v.is_null() { return None; }
                 v.as_i64().map(|n| n as i32).or_else(|| v.as_str().and_then(|s| s.parse::<i32>().ok()))
             }),
+            expected_salary: parsed.get("expected_salary").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            expected_city: parsed.get("expected_city").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            self_introduction: parsed.get("self_introduction").and_then(|v| v.as_str()).map(|s| s.to_string()),
             skills: parsed.get("skills")
                 .and_then(|v| v.as_array())
                 .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
@@ -280,6 +302,28 @@ impl LlmClient {
                             position: position.to_string(),
                             duration: duration.to_string(),
                             description,
+                        })
+                    }).collect()
+                })
+                .unwrap_or_default(),
+            project_experiences: parsed.get("project_experiences")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter().filter_map(|v| {
+                        let name = v.get("name")?.as_str()?;
+                        let role = v.get("role").and_then(|r| r.as_str()).map(|s| s.to_string());
+                        let duration = v.get("duration").and_then(|d| d.as_str()).map(|s| s.to_string());
+                        let description = v.get("description").and_then(|d| d.as_str()).map(|s| s.to_string());
+                        let technologies = v.get("technologies")
+                            .and_then(|t| t.as_array())
+                            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                            .unwrap_or_default();
+                        Some(ProjectExperience {
+                            name: name.to_string(),
+                            role,
+                            duration,
+                            description,
+                            technologies,
                         })
                     }).collect()
                 })

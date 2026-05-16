@@ -106,9 +106,6 @@ pub fn run() {
             commands::backup::export_backup,
             commands::backup::import_backup,
             commands::backup::rollback_backup,
-            commands::pipeline_templates::list_pipeline_templates,
-            commands::pipeline_templates::create_pipeline_template,
-            commands::pipeline_templates::delete_pipeline_template,
             commands::llm_configs::list_llm_configs,
             commands::llm_configs::create_llm_config,
             commands::llm_configs::update_llm_config,
@@ -116,6 +113,14 @@ pub fn run() {
             commands::llm_configs::get_default_llm_config,
             commands::llm_configs::test_llm_connection,
             commands::resume_parser::parse_resume,
+            commands::resume_parser::parse_resume_text,
+            commands::ocr_configs::list_ocr_configs,
+            commands::ocr_configs::create_ocr_config,
+            commands::ocr_configs::update_ocr_config,
+            commands::ocr_configs::delete_ocr_config,
+            commands::ocr_configs::get_default_ocr_config,
+            commands::ocr_configs::test_ocr_connection,
+            commands::ocr_configs::ocr_image,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

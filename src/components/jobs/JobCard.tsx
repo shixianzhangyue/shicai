@@ -48,6 +48,9 @@ function JobCard({ job, onEdit, onDuplicate, onDelete, onStatusChange }: JobCard
         <p className="text-sm text-[#94a3b8]">
           薪资：{formatSalary(job.salaryMin, job.salaryMax)}
         </p>
+        <p className="text-sm text-[#94a3b8]">
+          招聘人数：{job.headcount ?? 1} 人
+        </p>
       </div>
 
       {/* Tags */}

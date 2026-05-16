@@ -10,6 +10,8 @@ import {
   Users,
   Briefcase,
   Loader2,
+  Target,
+  CheckCircle,
 } from 'lucide-react';
 
 function Dashboard() {
@@ -149,7 +151,7 @@ function Dashboard() {
       )}
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <StatCard
           icon={Briefcase}
           label="在招职位"
@@ -159,11 +161,18 @@ function Dashboard() {
           loading={loadingStats}
         />
         <StatCard
+          icon={Target}
+          label="需求人数"
+          value={loadingStats ? '...' : String(stats?.totalHeadcount ?? 0)}
+          color="text-purple-400"
+          loading={loadingStats}
+        />
+        <StatCard
           icon={Users}
           label="候选人总数"
           value={loadingStats ? '...' : String(stats?.totalCandidates ?? 0)}
           color="text-emerald-400"
-          onClick={() => navigate('/candidates')}
+          onClick={() => navigate('/talent-pool')}
           loading={loadingStats}
         />
         <StatCard
@@ -171,7 +180,7 @@ function Dashboard() {
           label="人才库"
           value={loadingStats ? '...' : String(stats?.talentPoolSize ?? 0)}
           color="text-amber-400"
-          onClick={() => navigate('/talent-pool')}
+          onClick={() => navigate('/talent-pool?mode=talent-pool')}
           loading={loadingStats}
         />
         <StatCard
@@ -180,6 +189,13 @@ function Dashboard() {
           value={loadingStats ? '...' : String(stats?.todayFollowUps ?? 0)}
           color="text-red-400"
           onClick={() => navigate('/candidates')}
+          loading={loadingStats}
+        />
+        <StatCard
+          icon={CheckCircle}
+          label="已入职"
+          value={loadingStats ? '...' : String(stats?.hiredCount ?? 0)}
+          color="text-green-400"
           loading={loadingStats}
         />
       </div>
