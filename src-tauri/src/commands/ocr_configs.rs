@@ -210,8 +210,6 @@ pub async fn get_default_ocr_config(
 #[tauri::command]
 pub async fn test_ocr_connection(
     _state: tauri::State<'_, DbPool>,
-    _id: i64,
-    _provider: String,
     api_key: String,
     secret_key: String,
 ) -> Result<String, String> {

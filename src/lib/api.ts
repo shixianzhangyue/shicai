@@ -229,8 +229,6 @@ export const api = {
     getDefault: () => invoke<OcrConfig | null>('get_default_ocr_config'),
     test: (config: { provider: string; apiKey: string; secretKey: string }) =>
       invoke<string>('test_ocr_connection', {
-        id: 0, // Will be ignored for test
-        provider: config.provider,
         api_key: config.apiKey,
         secret_key: config.secretKey,
       }),
