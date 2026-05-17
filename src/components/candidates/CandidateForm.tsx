@@ -153,7 +153,9 @@ function CandidateForm({ open, onOpenChange, editingCandidate }: CandidateFormPr
       if (isEditing && editingCandidate) {
         await updateCandidate(editingCandidate.id, payload);
       } else {
-        await createCandidate(payload);
+        // Auto-add to talent pool when creating from parsed resume
+        const autoPool = parsedData !== null;
+        await createCandidate(payload, autoPool);
       }
       onOpenChange(false);
     } catch (err) {

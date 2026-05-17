@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Job, Tag, JobTemplate, Candidate, PaginatedCandidates, CandidateListParams, PipelineStage, PipelineEntry, CandidatePipeline, FollowUp, FollowUpWithCandidate, TalentEntry, RelationWithCandidate, CandidateRelation, OverviewStats, FunnelData, ExportableFieldMeta, ExportResult, ExportConfig, LlmConfig, ParsedResume, OcrConfig, CreateOcrConfigInput, UpdateOcrConfigInput, OcrResult } from '@/types';
+import type { Job, Tag, JobTemplate, Candidate, PaginatedCandidates, CandidateListParams, PipelineStage, PipelineEntry, CandidatePipeline, FollowUp, FollowUpWithCandidate, TalentEntry, RelationWithCandidate, CandidateRelation, OverviewStats, FunnelData, ExportableFieldMeta, ExportResult, ExportConfig, LlmConfig, ParsedResume, OcrConfig, CreateOcrConfigInput, UpdateOcrConfigInput, OcrResult, StageStat, PaginatedCandidateWithPipeline, JobWithCandidateCount } from '@/types';
 
 function handleError(error: unknown): string {
   const msg = error instanceof Error ? error.message : String(error);
@@ -8,7 +8,8 @@ function handleError(error: unknown): string {
 
 /** Maps a frontend Candidate-like object to snake_case for Rust CreateCandidateInput. */
 function mapCreateCandidateInput(
-  input: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>
+  input: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>,
+  autoPool?: boolean
 ): Record<string, unknown> {
   return {
     name: input.name,
@@ -20,6 +21,7 @@ function mapCreateCandidateInput(
     years_exp: input.yearsExp,
     source: input.source,
     tags: input.tags,
+    auto_pool: autoPool ?? false,
   };
 }
 
@@ -98,8 +100,8 @@ export const api = {
       sort_order: params?.sortOrder,
     }),
     get: (id: string) => invoke<Candidate>('get_candidate', { id }),
-    create: (input: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'inTalentPool'>) =>
-      invoke<Candidate>('create_candidate', { input: mapCreateCandidateInput(input) }),
+    create: (input: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'inTalentPool'>, autoPool?: boolean) =>
+      invoke<Candidate>('create_candidate', { input: mapCreateCandidateInput(input, autoPool) }),
     update: (id: string, input: Partial<Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'inTalentPool'>>) =>
       invoke<Candidate>('update_candidate', { id, input: mapUpdateCandidateInput(input) }),
     delete: (id: string) => invoke<void>('delete_candidate', { id }),
@@ -143,6 +145,23 @@ export const api = {
       invoke<void>('batch_move', { pipelineIds, stageId }),
     batchReject: (pipelineIds: string[]) =>
       invoke<void>('batch_reject', { pipelineIds }),
+    getStageStats: (jobId?: string) =>
+      invoke<StageStat[]>('get_stage_stats', { jobId: jobId || null }),
+    listCandidatesByJob: (params: {
+      jobId?: string;
+      stageId?: string;
+      keyword?: string;
+      page?: number;
+      pageSize?: number;
+    }) => invoke<PaginatedCandidateWithPipeline>('list_candidates_by_job', {
+      jobId: params.jobId || null,
+      stageId: params.stageId || null,
+      keyword: params.keyword || null,
+      page: params.page || null,
+      pageSize: params.pageSize || null,
+    }),
+    getJobsWithCandidates: () =>
+      invoke<JobWithCandidateCount[]>('get_jobs_with_candidates'),
   },
   talentPool: {
     list: (filters?: {

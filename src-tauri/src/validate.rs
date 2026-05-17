@@ -51,6 +51,19 @@ pub struct CreateCandidateInput {
     pub years_exp: Option<i32>,
     pub source: String,
     pub tags: Vec<String>,
+    // V8 enhanced fields
+    pub gender: Option<String>,
+    pub birth_date: Option<String>,
+    pub expected_city: Option<String>,
+    pub expected_salary: Option<String>,
+    pub graduation_date: Option<String>,
+    pub school: Option<String>,
+    pub major: Option<String>,
+    pub source_detail: Option<String>,
+    pub work_experiences: Option<String>,
+    pub education_history: Option<String>,
+    /// Whether to automatically add to talent pool (for resume imports)
+    pub auto_pool: Option<bool>,
 }
 
 /// Input validation for updating a candidate.
@@ -67,6 +80,18 @@ pub struct UpdateCandidateInput {
     pub years_exp: Option<i32>,
     pub source: Option<String>,
     pub tags: Option<Vec<String>>,
+    // V8 enhanced fields
+    pub gender: Option<String>,
+    pub birth_date: Option<String>,
+    pub expected_city: Option<String>,
+    pub expected_salary: Option<String>,
+    pub graduation_date: Option<String>,
+    pub school: Option<String>,
+    pub major: Option<String>,
+    pub source_detail: Option<String>,
+    pub work_experiences: Option<String>,
+    pub education_history: Option<String>,
+    pub is_starred: Option<bool>,
 }
 
 /// Input validation for data export.

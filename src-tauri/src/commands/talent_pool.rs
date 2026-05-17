@@ -156,6 +156,9 @@ pub fn reactivate_candidate(
         status: "active".to_string(),
         entered_at: now.clone(),
         updated_at: now,
+        interview_conclusion: None,
+        interview_notes: None,
+        applied_at: None,
     })
 }
 
@@ -236,6 +239,22 @@ pub fn check_duplicate(
                 deleted_at: row.get(10)?,
                 created_at: row.get(11)?,
                 updated_at: row.get(12)?,
+                // V8 fields — defaults since this query doesn't select these columns
+                gender: None,
+                birth_date: None,
+                expected_city: None,
+                expected_salary: None,
+                graduation_date: None,
+                school: None,
+                major: None,
+                is_starred: false,
+                is_hidden: false,
+                work_experiences: "[]".to_string(),
+                education_history: "[]".to_string(),
+                source_detail: None,
+                avatar_url: None,
+                age: None,
+                last_active_at: None,
             })
         })
         .map_err(|e| {

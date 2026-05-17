@@ -9,6 +9,7 @@ import CandidateForm from '@/components/candidates/CandidateForm';
 import { CandidateDetail } from '@/components/candidates/CandidateDetail';
 import { ImportDialog } from '@/components/candidates/ImportDialog';
 import DeleteCandidateDialog from '@/components/candidates/DeleteCandidateDialog';
+import { RecommendToJobDialog } from '@/components/candidates/RecommendToJobDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -29,6 +30,9 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  UserPlus,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 
 const EDUCATION_OPTIONS: { value: string; label: string }[] = [
@@ -92,6 +96,8 @@ function TalentPool() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [searchDebounce, setSearchDebounce] = useState<NodeJS.Timeout | null>(null);
+  const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
+  const [recommendOpen, setRecommendOpen] = useState(false);
 
   useEffect(() => {
     fetchCandidates();
@@ -165,6 +171,34 @@ function TalentPool() {
 
   const handleApplyFilters = () => {
     fetchCandidates();
+  };
+
+  const toggleCandidateSelection = (candidateId: string) => {
+    setSelectedCandidates((prev) => {
+      const next = new Set(prev);
+      if (next.has(candidateId)) {
+        next.delete(candidateId);
+      } else {
+        next.add(candidateId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedCandidates.size === candidates.length) {
+      setSelectedCandidates(new Set());
+    } else {
+      setSelectedCandidates(new Set(candidates.map((c) => c.id)));
+    }
+  };
+
+  const getSelectedCandidatesList = (): Candidate[] => {
+    return candidates.filter((c) => selectedCandidates.has(c.id));
+  };
+
+  const clearSelection = () => {
+    setSelectedCandidates(new Set());
   };
 
   const renderPagination = () => {
@@ -365,32 +399,81 @@ function TalentPool() {
         </div>
       </div>
 
-      {/* Sort Controls */}
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-sm text-[#94a3b8]">排序：</span>
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as any)}
-          className="h-8 px-2 rounded bg-[#1a1d24] border border-[#2a2d35] text-sm text-[#e2e8f0]"
-        >
-          {SORT_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={toggleSortOrder}
-          className="h-8 px-2 border-[#2a2d35] text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#2a2d35]"
-        >
-          {sortOrder === 'asc' ? (
-            <ArrowUp className="w-4 h-4" />
-          ) : (
-            <ArrowDown className="w-4 h-4" />
-          )}
-        </Button>
+      {/* Sort Controls & Selection Actions */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-[#94a3b8]">排序：</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            className="h-8 px-2 rounded bg-[#1a1d24] border border-[#2a2d35] text-sm text-[#e2e8f0]"
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleSortOrder}
+            className="h-8 px-2 border-[#2a2d35] text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#2a2d35]"
+          >
+            {sortOrder === 'asc' ? (
+              <ArrowUp className="w-4 h-4" />
+            ) : (
+              <ArrowDown className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+
+        {/* Selection Actions */}
+        {candidates.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleSelectAll}
+              className="h-8 border-[#2a2d35] text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#2a2d35]"
+            >
+              {selectedCandidates.size === candidates.length ? (
+                <>
+                  <CheckSquare className="w-4 h-4 mr-1" />
+                  取消全选
+                </>
+              ) : (
+                <>
+                  <Square className="w-4 h-4 mr-1" />
+                  全选
+                </>
+              )}
+            </Button>
+            {selectedCandidates.size > 0 && (
+              <>
+                <span className="text-sm text-[#94a3b8]">
+                  已选 {selectedCandidates.size} 人
+                </span>
+                <Button
+                  size="sm"
+                  onClick={() => setRecommendOpen(true)}
+                  className="h-8 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white"
+                >
+                  <UserPlus className="w-4 h-4 mr-1" />
+                  推荐到职位
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearSelection}
+                  className="h-8 text-[#94a3b8] hover:text-[#e2e8f0]"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Filters Panel */}
@@ -557,14 +640,31 @@ function TalentPool() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {candidates.map((candidate) => (
-              <CandidateCard
-                key={candidate.id}
-                candidate={candidate}
-                onEdit={() => handleEdit(candidate)}
-                onDelete={() => handleDelete(candidate)}
-                onClick={handleViewDetail}
-                showTalentPoolBadge={viewMode === 'all'}
-              />
+              <div key={candidate.id} className="relative group">
+                {/* Selection Checkbox */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleCandidateSelection(candidate.id);
+                  }}
+                  className={`absolute top-3 left-3 z-10 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
+                    selectedCandidates.has(candidate.id)
+                      ? 'bg-[#3b82f6] border-[#3b82f6] text-white'
+                      : 'border-[#4a4d55] bg-[#1a1d24]/80 opacity-0 group-hover:opacity-100 hover:border-[#3b82f6]'
+                  }`}
+                >
+                  {selectedCandidates.has(candidate.id) && (
+                    <CheckSquare className="w-4 h-4" />
+                  )}
+                </button>
+                <CandidateCard
+                  candidate={candidate}
+                  onEdit={() => handleEdit(candidate)}
+                  onDelete={() => handleDelete(candidate)}
+                  onClick={handleViewDetail}
+                  showTalentPoolBadge={viewMode === 'all'}
+                />
+              </div>
             ))}
           </div>
 
@@ -605,6 +705,17 @@ function TalentPool() {
         onSuccess={() => {
           fetchCandidates();
           setImportOpen(false);
+        }}
+      />
+
+      {/* Recommend to Job Dialog */}
+      <RecommendToJobDialog
+        open={recommendOpen}
+        onOpenChange={setRecommendOpen}
+        candidates={getSelectedCandidatesList()}
+        onSuccess={() => {
+          clearSelection();
+          fetchCandidates();
         }}
       />
     </PageLayout>

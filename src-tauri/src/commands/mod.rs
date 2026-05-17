@@ -1,11 +1,15 @@
+pub mod analytics;
 pub mod backup;
 pub mod candidate_relations;
 pub mod candidates;
+pub mod cloud_sync;
 pub mod export;
+pub mod follow_up_templates;
 pub mod follow_ups;
 pub mod job_templates;
 pub mod jobs;
 pub mod llm_configs;
+pub mod merge;
 pub mod ocr_configs;
 pub mod pipeline;
 pub mod resume_parser;

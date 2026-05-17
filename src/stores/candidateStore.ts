@@ -37,7 +37,7 @@ interface CandidateState {
 
   // Actions
   fetchCandidates: () => Promise<void>;
-  createCandidate: (input: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'inTalentPool'>) => Promise<void>;
+  createCandidate: (input: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'inTalentPool'>, autoPool?: boolean) => Promise<void>;
   updateCandidate: (id: string, input: Partial<Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'inTalentPool'>>) => Promise<void>;
   deleteCandidate: (id: string) => Promise<void>;
   setSearchKeyword: (kw: string) => void;
@@ -129,10 +129,10 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
     }
   },
 
-  createCandidate: async (input) => {
+  createCandidate: async (input, autoPool?: boolean) => {
     set({ loading: true, error: null });
     try {
-      const candidate = await api.candidates.create(input);
+      const candidate = await api.candidates.create(input, autoPool);
       // Refresh list to get updated pagination
       await get().fetchCandidates();
       // Add to search index

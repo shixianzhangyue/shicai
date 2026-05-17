@@ -1,11 +1,11 @@
-﻿use crate::db::pool::DbPool;
+use crate::db::pool::DbPool;
 use crate::validate::{CreateCandidateInput, UpdateCandidateInput, validate_input};
 use chrono::Local;
 use rusqlite::params;
 use serde::Serialize;
 
 /// Candidate entity returned by candidate commands.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Candidate {
     pub id: String,
@@ -22,6 +22,23 @@ pub struct Candidate {
     pub deleted_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    // V8 enhanced fields
+    pub gender: Option<String>,
+    pub birth_date: Option<String>,
+    pub expected_city: Option<String>,
+    pub expected_salary: Option<String>,
+    pub graduation_date: Option<String>,
+    pub school: Option<String>,
+    pub major: Option<String>,
+    pub is_starred: bool,
+    pub is_hidden: bool,
+    pub work_experiences: String,
+    pub education_history: String,
+    pub source_detail: Option<String>,
+    // V12 enhanced fields
+    pub avatar_url: Option<String>,
+    pub age: Option<i32>,
+    pub last_active_at: Option<String>,
 }
 
 /// Paginated result wrapper.
@@ -35,6 +52,51 @@ pub struct PaginatedCandidates {
     pub total_pages: i32,
 }
 
+/// Shared column list for all candidate SELECT queries.
+/// Keeps indices stable across list, get, update, and delete queries.
+const CANDIDATE_COLUMNS: &str = "c.id, c.name, c.phone, c.email, c.current_company, c.current_position, c.education, c.years_exp, c.source, c.tags, c.deleted_at, c.created_at, c.updated_at, EXISTS (SELECT 1 FROM candidate_pipeline cp WHERE cp.candidate_id = c.id AND cp.status = 'pooled') as in_pool, c.gender, c.birth_date, c.expected_city, c.expected_salary, c.graduation_date, c.school, c.major, c.is_starred, c.is_hidden, c.work_experiences, c.education_history, c.source_detail, c.avatar_url, c.age, c.last_active_at";
+
+/// Maps a rusqlite Row to a Candidate struct.
+/// Column order must match CANDIDATE_COLUMNS exactly.
+fn map_candidate(row: &rusqlite::Row) -> rusqlite::Result<Candidate> {
+    let tags_str: String = row.get(9)?;
+    let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
+    let in_pool: bool = row.get(13)?;
+    let is_starred_raw: i32 = row.get(21)?;
+    let is_hidden_raw: i32 = row.get(22)?;
+    Ok(Candidate {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        phone: row.get(2)?,
+        email: row.get(3)?,
+        current_company: row.get(4)?,
+        current_position: row.get(5)?,
+        education: row.get(6)?,
+        years_exp: row.get(7)?,
+        source: row.get(8)?,
+        tags,
+        in_talent_pool: in_pool,
+        deleted_at: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
+        gender: row.get(14)?,
+        birth_date: row.get(15)?,
+        expected_city: row.get(16)?,
+        expected_salary: row.get(17)?,
+        graduation_date: row.get(18)?,
+        school: row.get(19)?,
+        major: row.get(20)?,
+        is_starred: is_starred_raw != 0,
+        is_hidden: is_hidden_raw != 0,
+        work_experiences: row.get(23)?,
+        education_history: row.get(24)?,
+        source_detail: row.get(25)?,
+        avatar_url: row.get(26)?,
+        age: row.get(27)?,
+        last_active_at: row.get(28)?,
+    })
+}
+
 /// Queries candidates with optional multi-dimensional filters and pagination.
 #[tauri::command(rename_all = "snake_case")]
 pub fn list_candidates(
@@ -46,6 +108,10 @@ pub fn list_candidates(
     max_exp: Option<i32>,
     source: Option<String>,
     in_talent_pool: Option<bool>,
+    school: Option<String>,
+    expected_city: Option<String>,
+    gender: Option<String>,
+    is_starred: Option<bool>,
     page: Option<i32>,
     page_size: Option<i32>,
     sort_by: Option<String>,
@@ -70,6 +136,9 @@ pub fn list_candidates(
         .unwrap_or_default();
     let education_val = education.filter(|e| !e.is_empty());
     let source_val = source.filter(|s| !s.is_empty());
+    let school_val = school.filter(|s| !s.is_empty());
+    let city_val = expected_city.filter(|c| !c.is_empty());
+    let gender_val = gender.filter(|g| !g.is_empty());
 
     let mut conditions: Vec<String> = Vec::new();
 
@@ -79,7 +148,7 @@ pub fn list_candidates(
 
     if keyword_like.is_some() {
         conditions.push(
-            "(c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR c.current_company LIKE ? OR c.current_position LIKE ?)"
+            "(c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR c.current_company LIKE ? OR c.current_position LIKE ? OR c.school LIKE ?)"
                 .to_string(),
         );
     }
@@ -104,6 +173,22 @@ pub fn list_candidates(
         conditions.push("c.source = ?".to_string());
     }
 
+    if school_val.is_some() {
+        conditions.push("c.school = ?".to_string());
+    }
+
+    if city_val.is_some() {
+        conditions.push("c.expected_city = ?".to_string());
+    }
+
+    if gender_val.is_some() {
+        conditions.push("c.gender = ?".to_string());
+    }
+
+    if is_starred == Some(true) {
+        conditions.push("c.is_starred = 1".to_string());
+    }
+
     // Talent pool filter: check if candidate has pooled status in any pipeline
     if in_talent_pool == Some(true) {
         conditions.push(
@@ -119,7 +204,7 @@ pub fn list_candidates(
     };
 
     // Sort configuration
-    let allowed_sort_fields = ["name", "created_at", "updated_at", "years_exp", "education"];
+    let allowed_sort_fields = ["name", "created_at", "updated_at", "years_exp", "education", "school", "expected_city"];
     let sort_field = sort_by
         .filter(|s| allowed_sort_fields.contains(&s.as_str()))
         .unwrap_or_else(|| "created_at".to_string());
@@ -142,7 +227,7 @@ pub fn list_candidates(
 
     let mut count_params: Vec<&dyn rusqlite::ToSql> = Vec::new();
     if let Some(ref like) = keyword_like {
-        for _ in 0..5 {
+        for _ in 0..6 {
             count_params.push(like);
         }
     }
@@ -161,6 +246,15 @@ pub fn list_candidates(
     if let Some(ref src) = source_val {
         count_params.push(src);
     }
+    if let Some(ref s) = school_val {
+        count_params.push(s);
+    }
+    if let Some(ref c) = city_val {
+        count_params.push(c);
+    }
+    if let Some(ref g) = gender_val {
+        count_params.push(g);
+    }
 
     let total: i64 = count_stmt.query_row(count_params.as_slice(), |row| row.get(0)).map_err(|e| {
         let msg = format!("Failed to count candidates: {}", e);
@@ -172,17 +266,15 @@ pub fn list_candidates(
 
     // Query paginated results
     let sql = format!(
-        "SELECT c.id, c.name, c.phone, c.email, c.current_company, c.current_position, c.education, c.years_exp, c.source, c.tags, c.deleted_at, c.created_at, c.updated_at,
-         EXISTS (SELECT 1 FROM candidate_pipeline cp WHERE cp.candidate_id = c.id AND cp.status = 'pooled') as in_pool
-         FROM candidates c {} ORDER BY c.{} {} LIMIT ? OFFSET ?",
-        where_clause, sort_field, order
+        "SELECT {} FROM candidates c {} ORDER BY c.{} {} LIMIT ? OFFSET ?",
+        CANDIDATE_COLUMNS, where_clause, sort_field, order
     );
 
     // Build parameter references in the exact order they appear in the query.
     let mut param_refs: Vec<&dyn rusqlite::ToSql> = Vec::new();
 
     if let Some(ref like) = keyword_like {
-        for _ in 0..5 {
+        for _ in 0..6 {
             param_refs.push(like);
         }
     }
@@ -207,6 +299,18 @@ pub fn list_candidates(
         param_refs.push(src);
     }
 
+    if let Some(ref s) = school_val {
+        param_refs.push(s);
+    }
+
+    if let Some(ref c) = city_val {
+        param_refs.push(c);
+    }
+
+    if let Some(ref g) = gender_val {
+        param_refs.push(g);
+    }
+
     param_refs.push(&size);
     param_refs.push(&offset);
 
@@ -217,27 +321,7 @@ pub fn list_candidates(
     })?;
 
     let candidates = stmt
-        .query_map(param_refs.as_slice(), |row| {
-            let tags_str: String = row.get(9)?;
-            let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
-            let in_pool: bool = row.get(13)?;
-            Ok(Candidate {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                phone: row.get(2)?,
-                email: row.get(3)?,
-                current_company: row.get(4)?,
-                current_position: row.get(5)?,
-                education: row.get(6)?,
-                years_exp: row.get(7)?,
-                source: row.get(8)?,
-                tags,
-                in_talent_pool: in_pool,
-                deleted_at: row.get(10)?,
-                created_at: row.get(11)?,
-                updated_at: row.get(12)?,
-            })
-        })
+        .query_map(param_refs.as_slice(), map_candidate)
         .map_err(|e| {
             let msg = format!("Failed to execute list_candidates query: {}", e);
             log::error!("{}", msg);
@@ -268,34 +352,13 @@ pub fn get_candidate(state: tauri::State<DbPool>, id: String) -> Result<Candidat
         msg
     })?;
 
+    let sql = format!(
+        "SELECT {} FROM candidates c WHERE c.id = ?1 AND c.deleted_at IS NULL",
+        CANDIDATE_COLUMNS
+    );
+
     let candidate = conn
-        .query_row(
-            "SELECT c.id, c.name, c.phone, c.email, c.current_company, c.current_position, c.education, c.years_exp, c.source, c.tags, c.deleted_at, c.created_at, c.updated_at,
-             EXISTS (SELECT 1 FROM candidate_pipeline cp WHERE cp.candidate_id = c.id AND cp.status = 'pooled') as in_pool
-             FROM candidates c WHERE c.id = ?1 AND c.deleted_at IS NULL",
-            params![&id],
-            |row| {
-                let tags_str: String = row.get(9)?;
-                let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
-                let in_pool: bool = row.get(13)?;
-                Ok(Candidate {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    phone: row.get(2)?,
-                    email: row.get(3)?,
-                    current_company: row.get(4)?,
-                    current_position: row.get(5)?,
-                    education: row.get(6)?,
-                    years_exp: row.get(7)?,
-                    source: row.get(8)?,
-                    tags,
-                    in_talent_pool: in_pool,
-                    deleted_at: row.get(10)?,
-                    created_at: row.get(11)?,
-                    updated_at: row.get(12)?,
-                })
-            },
-        )
+        .query_row(&sql, params![&id], map_candidate)
         .map_err(|e| {
             let msg = format!("Failed to get candidate {}: {}", id, e);
             log::error!("{}", msg);
@@ -322,9 +385,11 @@ pub fn create_candidate(
     let id = nanoid::nanoid!();
     let now = Local::now().to_rfc3339();
     let tags_json = serde_json::to_string(&input.tags).unwrap_or_else(|_| "[]".to_string());
+    let work_json = input.work_experiences.unwrap_or_else(|| "[]".to_string());
+    let edu_json = input.education_history.unwrap_or_else(|| "[]".to_string());
 
     conn.execute(
-        "INSERT INTO candidates (id, name, phone, email, current_company, current_position, education, years_exp, source, tags, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        "INSERT INTO candidates (id, name, phone, email, current_company, current_position, education, years_exp, source, tags, created_at, updated_at, gender, birth_date, expected_city, expected_salary, graduation_date, school, major, is_starred, is_hidden, work_experiences, education_history, source_detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, 0, 0, ?20, ?21, ?22)",
         params![
             &id,
             &input.name,
@@ -338,6 +403,16 @@ pub fn create_candidate(
             &tags_json,
             &now,
             &now,
+            &input.gender,
+            &input.birth_date,
+            &input.expected_city,
+            &input.expected_salary,
+            &input.graduation_date,
+            &input.school,
+            &input.major,
+            &work_json,
+            &edu_json,
+            &input.source_detail,
         ],
     )
     .map_err(|e| {
@@ -347,6 +422,23 @@ pub fn create_candidate(
     })?;
 
     log::info!("Created candidate '{}' with id {}", input.name, id);
+
+    // Auto-add to talent pool if requested (for resume imports)
+    let in_talent_pool = if input.auto_pool.unwrap_or(false) {
+        let pipeline_id = nanoid::nanoid!();
+        conn.execute(
+            "INSERT INTO candidate_pipeline (id, candidate_id, job_id, current_stage_id, status, entered_at, updated_at) VALUES (?1, ?2, NULL, NULL, 'pooled', ?3, ?3)",
+            params![&pipeline_id, &id, &now],
+        ).map_err(|e| {
+            let msg = format!("Failed to add candidate to talent pool: {}", e);
+            log::error!("{}", msg);
+            msg
+        })?;
+        log::info!("Auto-added candidate '{}' to talent pool", input.name);
+        true
+    } else {
+        false
+    };
 
     Ok(Candidate {
         id,
@@ -359,10 +451,25 @@ pub fn create_candidate(
         years_exp: input.years_exp,
         source: input.source,
         tags: input.tags,
-        in_talent_pool: false,
+        in_talent_pool,
         deleted_at: None,
         created_at: now.clone(),
         updated_at: now,
+        gender: input.gender,
+        birth_date: input.birth_date,
+        expected_city: input.expected_city,
+        expected_salary: input.expected_salary,
+        graduation_date: input.graduation_date,
+        school: input.school,
+        major: input.major,
+        is_starred: false,
+        is_hidden: false,
+        work_experiences: work_json,
+        education_history: edu_json,
+        source_detail: input.source_detail,
+        avatar_url: None,
+        age: None,
+        last_active_at: None,
     })
 }
 
@@ -409,6 +516,40 @@ pub fn update_candidate(
     if input.tags.is_some() {
         updates.push("tags = ?".to_string());
     }
+    // V8 fields
+    if input.gender.is_some() {
+        updates.push("gender = ?".to_string());
+    }
+    if input.birth_date.is_some() {
+        updates.push("birth_date = ?".to_string());
+    }
+    if input.expected_city.is_some() {
+        updates.push("expected_city = ?".to_string());
+    }
+    if input.expected_salary.is_some() {
+        updates.push("expected_salary = ?".to_string());
+    }
+    if input.graduation_date.is_some() {
+        updates.push("graduation_date = ?".to_string());
+    }
+    if input.school.is_some() {
+        updates.push("school = ?".to_string());
+    }
+    if input.major.is_some() {
+        updates.push("major = ?".to_string());
+    }
+    if input.source_detail.is_some() {
+        updates.push("source_detail = ?".to_string());
+    }
+    if input.work_experiences.is_some() {
+        updates.push("work_experiences = ?".to_string());
+    }
+    if input.education_history.is_some() {
+        updates.push("education_history = ?".to_string());
+    }
+    if input.is_starred.is_some() {
+        updates.push("is_starred = ?".to_string());
+    }
 
     if updates.is_empty() {
         return Err("No fields to update".to_string());
@@ -441,9 +582,8 @@ pub fn update_candidate(
     if let Some(ref v) = input.education {
         param_refs.push(v);
     }
-    match input.years_exp {
-        Some(ref v) => param_refs.push(v),
-        None => {}
+    if let Some(ref v) = input.years_exp {
+        param_refs.push(v);
     }
     if let Some(ref v) = input.source {
         param_refs.push(v);
@@ -452,6 +592,42 @@ pub fn update_candidate(
     if let Some(ref v) = input.tags {
         tags_json = serde_json::to_string(v).unwrap_or_else(|_| "[]".to_string());
         param_refs.push(&tags_json);
+    }
+    // V8 fields
+    if let Some(ref v) = input.gender {
+        param_refs.push(v);
+    }
+    if let Some(ref v) = input.birth_date {
+        param_refs.push(v);
+    }
+    if let Some(ref v) = input.expected_city {
+        param_refs.push(v);
+    }
+    if let Some(ref v) = input.expected_salary {
+        param_refs.push(v);
+    }
+    if let Some(ref v) = input.graduation_date {
+        param_refs.push(v);
+    }
+    if let Some(ref v) = input.school {
+        param_refs.push(v);
+    }
+    if let Some(ref v) = input.major {
+        param_refs.push(v);
+    }
+    if let Some(ref v) = input.source_detail {
+        param_refs.push(v);
+    }
+    if let Some(ref v) = input.work_experiences {
+        param_refs.push(v);
+    }
+    if let Some(ref v) = input.education_history {
+        param_refs.push(v);
+    }
+    let starred_val;
+    if let Some(ref v) = input.is_starred {
+        starred_val = if *v { 1i32 } else { 0i32 };
+        param_refs.push(&starred_val);
     }
     param_refs.push(&now);
     param_refs.push(&id);
@@ -462,34 +638,13 @@ pub fn update_candidate(
         msg
     })?;
 
+    let query_sql = format!(
+        "SELECT {} FROM candidates c WHERE c.id = ?1 AND c.deleted_at IS NULL",
+        CANDIDATE_COLUMNS
+    );
+
     let candidate = conn
-        .query_row(
-            "SELECT c.id, c.name, c.phone, c.email, c.current_company, c.current_position, c.education, c.years_exp, c.source, c.tags, c.deleted_at, c.created_at, c.updated_at,
-             EXISTS (SELECT 1 FROM candidate_pipeline cp WHERE cp.candidate_id = c.id AND cp.status = 'pooled') as in_pool
-             FROM candidates c WHERE c.id = ?1 AND c.deleted_at IS NULL",
-            params![&id],
-            |row| {
-                let tags_str: String = row.get(9)?;
-                let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
-                let in_pool: bool = row.get(13)?;
-                Ok(Candidate {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    phone: row.get(2)?,
-                    email: row.get(3)?,
-                    current_company: row.get(4)?,
-                    current_position: row.get(5)?,
-                    education: row.get(6)?,
-                    years_exp: row.get(7)?,
-                    source: row.get(8)?,
-                    tags,
-                    in_talent_pool: in_pool,
-                    deleted_at: row.get(10)?,
-                    created_at: row.get(11)?,
-                    updated_at: row.get(12)?,
-                })
-            },
-        )
+        .query_row(&query_sql, params![&id], map_candidate)
         .map_err(|e| {
             let msg = format!("Failed to fetch updated candidate: {}", e);
             log::error!("{}", msg);
@@ -509,34 +664,13 @@ pub fn delete_candidate(state: tauri::State<DbPool>, id: String) -> Result<(), S
         msg
     })?;
 
+    let query_sql = format!(
+        "SELECT {} FROM candidates c WHERE c.id = ?1 AND c.deleted_at IS NULL",
+        CANDIDATE_COLUMNS
+    );
+
     let candidate = conn
-        .query_row(
-            "SELECT c.id, c.name, c.phone, c.email, c.current_company, c.current_position, c.education, c.years_exp, c.source, c.tags, c.deleted_at, c.created_at, c.updated_at,
-             EXISTS (SELECT 1 FROM candidate_pipeline cp WHERE cp.candidate_id = c.id AND cp.status = 'pooled') as in_pool
-             FROM candidates c WHERE c.id = ?1 AND c.deleted_at IS NULL",
-            params![&id],
-            |row| {
-                let tags_str: String = row.get(9)?;
-                let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
-                let in_pool: bool = row.get(13)?;
-                Ok(Candidate {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    phone: row.get(2)?,
-                    email: row.get(3)?,
-                    current_company: row.get(4)?,
-                    current_position: row.get(5)?,
-                    education: row.get(6)?,
-                    years_exp: row.get(7)?,
-                    source: row.get(8)?,
-                    tags,
-                    in_talent_pool: in_pool,
-                    deleted_at: row.get(10)?,
-                    created_at: row.get(11)?,
-                    updated_at: row.get(12)?,
-                })
-            },
-        )
+        .query_row(&query_sql, params![&id], map_candidate)
         .map_err(|e| {
             let msg = format!("Failed to fetch candidate for deletion {}: {}", id, e);
             log::error!("{}", msg);

@@ -112,6 +112,10 @@ export interface Candidate {
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  // V12 enhanced fields
+  avatarUrl: string | null;
+  age: number | null;
+  lastActiveAt: string | null;
 }
 
 export interface PaginatedCandidates {
@@ -168,6 +172,50 @@ export interface CandidatePipeline {
   status: PipelineStatus;
   enteredAt: string;
   updatedAt: string;
+  interviewConclusion: string | null;
+  interviewNotes: string | null;
+  appliedAt: string | null;
+}
+
+export interface StageStat {
+  stageName: string;
+  count: number;
+}
+
+export interface CandidateWithPipeline {
+  pipelineId: string;
+  candidateId: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  currentCompany: string | null;
+  currentPosition: string | null;
+  yearsExp: number | null;
+  age: number | null;
+  avatarUrl: string | null;
+  jobId: string;
+  jobTitle: string;
+  currentStageId: string | null;
+  currentStageName: string | null;
+  status: string;
+  interviewConclusion: string | null;
+  interviewNotes: string | null;
+  appliedAt: string | null;
+  updatedAt: string;
+}
+
+export interface PaginatedCandidateWithPipeline {
+  items: CandidateWithPipeline[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface JobWithCandidateCount {
+  id: string;
+  title: string;
+  candidateCount: number;
 }
 
 export interface FollowUp {
@@ -262,6 +310,9 @@ export interface PipelineEntry {
   status: string;
   enteredAt: string;
   updatedAt: string;
+  interviewConclusion: string | null;
+  interviewNotes: string | null;
+  appliedAt: string | null;
 }
 
 export interface FollowUpWithCandidate {

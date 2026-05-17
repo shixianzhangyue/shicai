@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, Check, Loader2, Sparkles } from 'lucide-react';
+import { AlertTriangle, Check, Loader2, Sparkles, Info } from 'lucide-react';
 
 interface ParsePreviewDialogProps {
   open: boolean;
@@ -136,6 +136,7 @@ function ParsePreviewDialog({ open, onOpenChange, data, onConfirm }: ParsePrevie
 
   const parseSource = currentData.parseSource || 'llm';
   const isAiEnhanced = parseSource === 'ai_enhanced';
+  const isOcrOnly = parseSource === 'ocr' || parseSource === 'text';
 
   // Field row wrapper: renders label + mark button + input
   const FieldRow = ({
@@ -154,24 +155,26 @@ function ParsePreviewDialog({ open, onOpenChange, data, onConfirm }: ParsePrevie
       <div className={`space-y-1 relative group ${className}`}>
         <div className="flex items-center gap-1.5">
           <Label className="text-[#94a3b8]">{label}</Label>
-          <button
-            type="button"
-            onClick={() => handleFieldMark(fieldKey)}
-            className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded transition-colors ${
-              isMarked
-                ? 'bg-[#ef4444]/20 text-[#ef4444] border border-[#ef4444]/40'
-                : 'bg-[#2a2d35] text-[#94a3b8] hover:bg-[#3a3d45] border border-transparent opacity-0 group-hover:opacity-100'
-            }`}
-          >
-            {isMarked ? (
-              <>
-                <AlertTriangle className="w-3 h-3" />
-                <span>需重识别</span>
-              </>
-            ) : (
-              <span>标记</span>
-            )}
-          </button>
+          {!isOcrOnly && (
+            <button
+              type="button"
+              onClick={() => handleFieldMark(fieldKey)}
+              className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                isMarked
+                  ? 'bg-[#ef4444]/20 text-[#ef4444] border border-[#ef4444]/40'
+                  : 'bg-[#2a2d35] text-[#94a3b8] hover:bg-[#3a3d45] border border-transparent opacity-0 group-hover:opacity-100'
+              }`}
+            >
+              {isMarked ? (
+                <>
+                  <AlertTriangle className="w-3 h-3" />
+                  <span>需重识别</span>
+                </>
+              ) : (
+                <span>标记</span>
+              )}
+            </button>
+          )}
         </div>
         {children}
       </div>
@@ -196,17 +199,29 @@ function ParsePreviewDialog({ open, onOpenChange, data, onConfirm }: ParsePrevie
                   <Sparkles className="w-3 h-3" />
                   AI 增强
                 </span>
+              ) : isOcrOnly ? (
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium bg-[#f59e0b]/20 text-[#fbbf24] border border-[#f59e0b]/30">
+                  {parseSource === 'ocr' ? 'OCR 提取' : '文本提取'}
+                </span>
               ) : (
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium bg-[#3b82f6]/20 text-[#60a5fa] border border-[#3b82f6]/30">
-                  {parseSource === 'ocr' ? 'OCR' : 'LLM'} 解析
+                  LLM 解析
                 </span>
               )}
             </div>
           </div>
         </DialogHeader>
 
-        {/* Enhancement controls */}
-        {markedFields.size > 0 && (
+        {/* OCR-only mode tip */}
+        {isOcrOnly && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#f59e0b]/10 border border-[#f59e0b]/30 text-sm text-[#fbbf24]">
+            <Info className="w-4 h-4 flex-shrink-0" />
+            <span>当前为 {parseSource === 'ocr' ? 'OCR' : '文本'} 提取模式，仅提取了原始文本。请手动填写各字段，或在设置中配置 LLM 后使用 AI 自动解析。</span>
+          </div>
+        )}
+
+        {/* Enhancement controls (only available when LLM is configured) */}
+        {!isOcrOnly && markedFields.size > 0 && (
           <div className="flex items-center gap-3 p-3 rounded-lg bg-[#1a1d25] border border-[#2a2d35]">
             <div className="flex items-center gap-2 text-sm text-[#94a3b8]">
               <AlertTriangle className="w-4 h-4 text-[#f59e0b]" />

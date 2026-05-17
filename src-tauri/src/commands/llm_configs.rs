@@ -271,7 +271,7 @@ pub fn get_default_llm_config(state: tauri::State<DbPool>) -> Result<Option<LlmC
 }
 
 /// Tests the LLM connection with the provided configuration.
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn test_llm_connection(
     provider: String,
     api_key: String,
