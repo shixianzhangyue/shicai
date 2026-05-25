@@ -18,20 +18,6 @@ const REQUIRED_SCOPES: &str = "files.readwrite offline_access user.read";
 /// This is a placeholder — replace with your registered Azure AD app client ID.
 const CLIENT_ID: &str = "YOUR_AZURE_CLIENT_ID";
 
-/// Sync configuration stored in DB.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SyncConfig {
-    pub id: String,
-    pub provider: String,
-    pub sync_enabled: bool,
-    pub last_sync_at: Option<String>,
-    pub sync_path: String,
-    pub token_expires_at: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
 /// Sync log entry for tracking upload/download history.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -131,19 +117,6 @@ pub fn refresh_access_token(refresh_token: &str) -> Result<(String, i64), String
     Ok((access_token, expires_in))
 }
 
-/// Checks if the current access token is still valid.
-pub fn is_token_valid(config: &SyncConfig) -> bool {
-    if !config.sync_enabled {
-        return false;
-    }
-    if let Some(ref expires) = config.token_expires_at {
-        if let Ok(exp_time) = chrono::DateTime::parse_from_rfc3339(expires) {
-            return exp_time > chrono::Utc::now();
-        }
-    }
-    false
-}
-
 /// Uploads a local file to OneDrive.
 pub fn upload_file(
     access_token: &str,
@@ -212,82 +185,6 @@ pub fn download_file(
         .map_err(|e| format!("Failed to write local file {}: {}", local_path.display(), e))?;
 
     Ok(size)
-}
-
-/// Lists files in a OneDrive folder.
-pub fn list_cloud_files(
-    access_token: &str,
-    cloud_path: &str,
-) -> Result<Vec<serde_json::Value>, String> {
-    let client = reqwest::blocking::Client::new();
-    let url = format!("{}/me/drive/root:{}/children", GRAPH_API_BASE, cloud_path);
-
-    let resp = client
-        .get(&url)
-        .bearer_auth(access_token)
-        .send()
-        .map_err(|e| format!("List request failed: {}", e))?;
-
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let body = resp.text().unwrap_or_default();
-        return Err(format!("List files failed ({}): {}", status, body));
-    }
-
-    let result: serde_json::Value = resp
-        .json()
-        .map_err(|e| format!("Failed to parse list response: {}", e))?;
-
-    let items = result["value"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-
-    Ok(items)
-}
-
-/// Deletes a file from OneDrive.
-pub fn delete_cloud_file(access_token: &str, cloud_path: &str) -> Result<(), String> {
-    let client = reqwest::blocking::Client::new();
-    let url = format!("{}/me/drive/root:{}:", GRAPH_API_BASE, cloud_path);
-
-    let resp = client
-        .delete(&url)
-        .bearer_auth(access_token)
-        .send()
-        .map_err(|e| format!("Delete request failed: {}", e))?;
-
-    let resp_status = resp.status();
-    if !resp_status.is_success() && resp_status.as_u16() != 404 {
-        let body = resp.text().unwrap_or_default();
-        return Err(format!("Delete failed ({}): {}", resp_status, body));
-    }
-
-    Ok(())
-}
-
-/// Saves sync configuration to the database.
-pub fn save_sync_config(pool: &DbPool, config: &SyncConfig) -> Result<(), String> {
-    let conn = pool.get().map_err(|e| format!("Failed to get DB connection: {}", e))?;
-
-    conn.execute(
-        "INSERT OR REPLACE INTO cloud_sync_config (id, provider, access_token, refresh_token, token_expires_at, sync_enabled, last_sync_at, sync_path, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        params![
-            &config.id,
-            &config.provider,
-            "", // access_token is not exposed in the struct
-            "", // refresh_token is not exposed
-            &config.token_expires_at,
-            config.sync_enabled as i32,
-            &config.last_sync_at,
-            &config.sync_path,
-            &config.created_at,
-            &config.updated_at,
-        ],
-    )
-    .map_err(|e| format!("Failed to save sync config: {}", e))?;
-
-    Ok(())
 }
 
 /// Records a sync log entry.
