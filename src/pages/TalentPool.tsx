@@ -3,13 +3,14 @@ import { useSearchParams } from 'react-router-dom';
 import PageLayout from '@/components/layout/PageLayout';
 import { useCandidateStore } from '@/stores/candidateStore';
 import { useTagStore } from '@/stores/tagStore';
+import { api } from '@/lib/api';
 import type { Candidate, EducationLevel, CandidateSource } from '@/types';
-import CandidateCard from '@/components/candidates/CandidateCard';
 import CandidateForm from '@/components/candidates/CandidateForm';
 import { CandidateDetail } from '@/components/candidates/CandidateDetail';
 import { ImportDialog } from '@/components/candidates/ImportDialog';
 import DeleteCandidateDialog from '@/components/candidates/DeleteCandidateDialog';
 import { RecommendToJobDialog } from '@/components/candidates/RecommendToJobDialog';
+import { FollowUpDialog } from '@/components/candidates/FollowUpDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -21,8 +22,6 @@ import {
   X,
   Upload,
   Download,
-  Archive,
-  List,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -33,6 +32,10 @@ import {
   UserPlus,
   CheckSquare,
   Square,
+  Pencil,
+  Trash2,
+  MoreHorizontal,
+  MessageSquare,
 } from 'lucide-react';
 
 const EDUCATION_OPTIONS: { value: string; label: string }[] = [
@@ -51,7 +54,9 @@ const SOURCE_OPTIONS: { value: string; label: string }[] = [
   { value: 'referral', label: '内推' },
 ];
 
-const SORT_OPTIONS: { value: string; label: string }[] = [
+type SortField = 'name' | 'created_at' | 'updated_at' | 'years_exp';
+
+const SORT_OPTIONS: { value: SortField; label: string }[] = [
   { value: 'created_at', label: '创建时间' },
   { value: 'updated_at', label: '更新时间' },
   { value: 'name', label: '姓名' },
@@ -69,7 +74,6 @@ function TalentPool() {
     error,
     searchKeyword,
     filters,
-    viewMode,
     sortBy,
     sortOrder,
     fetchCandidates,
@@ -77,7 +81,6 @@ function TalentPool() {
     setSearchKeyword,
     setFilters,
     resetFilters,
-    setViewMode,
     setSortBy,
     toggleSortOrder,
     setPage,
@@ -98,19 +101,15 @@ function TalentPool() {
   const [searchDebounce, setSearchDebounce] = useState<NodeJS.Timeout | null>(null);
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [recommendOpen, setRecommendOpen] = useState(false);
+  const [recommendSingle, setRecommendSingle] = useState<Candidate | null>(null);
+  const [followUpTarget, setFollowUpTarget] = useState<Candidate | null>(null);
+  const [followUpDialogOpen, setFollowUpDialogOpen] = useState(false);
+  const [followUpPipelineJobs, setFollowUpPipelineJobs] = useState<{ jobId: string; jobTitle: string }[]>([]);
 
   useEffect(() => {
     fetchCandidates();
     fetchTags();
   }, [fetchCandidates, fetchTags]);
-
-  // Handle URL query param for view mode
-  useEffect(() => {
-    const mode = searchParams.get('mode');
-    if (mode === 'talent-pool') {
-      setViewMode('talent-pool');
-    }
-  }, [searchParams, setViewMode]);
 
   // Handle URL query param for candidate detail (from TodayFollowUpsPanel)
   useEffect(() => {
@@ -160,6 +159,20 @@ function TalentPool() {
   const handleViewDetail = (candidate: Candidate) => {
     setDetailCandidate(candidate);
     setDetailOpen(true);
+  };
+
+  const handleOpenFollowUp = async (candidate: Candidate) => {
+    setFollowUpTarget(candidate);
+    try {
+      const pipelines = await api.pipeline.getPipelineByCandidate(candidate.id);
+      const jobs = pipelines
+        .filter((p) => p.jobId && p.status === 'active')
+        .map((p) => ({ jobId: p.jobId!, jobTitle: p.jobTitle || '未命名职位' }));
+      setFollowUpPipelineJobs(jobs);
+    } catch {
+      setFollowUpPipelineJobs([]);
+    }
+    setFollowUpDialogOpen(true);
   };
 
   const confirmDelete = async () => {
@@ -323,37 +336,10 @@ function TalentPool() {
   return (
     <PageLayout
       title="人才库"
-      description={viewMode === 'talent-pool' ? '查看人才池中的候选人' : '管理所有候选人'}
+      description="储备人才资源池，支持推荐到职位"
     >
-      {/* View Mode Toggle & Actions */}
+      {/* Actions */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="flex gap-2">
-          <Button
-            variant={viewMode === 'all' ? 'default' : 'outline'}
-            onClick={() => setViewMode('all')}
-            className={
-              viewMode === 'all'
-                ? 'bg-[#3b82f6] text-white'
-                : 'border-[#2a2d35] text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#2a2d35]'
-            }
-          >
-            <List className="w-4 h-4 mr-2" />
-            全部候选人
-          </Button>
-          <Button
-            variant={viewMode === 'talent-pool' ? 'default' : 'outline'}
-            onClick={() => setViewMode('talent-pool')}
-            className={
-              viewMode === 'talent-pool'
-                ? 'bg-[#8b5cf6] text-white'
-                : 'border-[#2a2d35] text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#2a2d35]'
-            }
-          >
-            <Archive className="w-4 h-4 mr-2" />
-            人才池
-          </Button>
-        </div>
-
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94a3b8]" />
           <Input
@@ -386,7 +372,7 @@ function TalentPool() {
             className="bg-[#3b82f6] hover:bg-[#2563eb] text-white"
           >
             <Plus className="w-4 h-4 mr-2" />
-            新建候选人
+            新建人才
           </Button>
           <Button
             variant="outline"
@@ -405,7 +391,7 @@ function TalentPool() {
           <span className="text-sm text-[#94a3b8]">排序：</span>
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
+            onChange={(e) => setSortBy(e.target.value as SortField)}
             className="h-8 px-2 rounded bg-[#1a1d24] border border-[#2a2d35] text-sm text-[#e2e8f0]"
           >
             {SORT_OPTIONS.map((opt) => (
@@ -605,67 +591,145 @@ function TalentPool() {
       {/* Empty State */}
       {!loading && candidates.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-xl border border-[#2a2d35] bg-[#1a1d24] py-16">
-          {viewMode === 'talent-pool' ? (
-            <>
-              <Archive className="w-12 h-12 mb-4 text-[#8b5cf6]" />
-              <h2 className="text-lg font-medium text-[#e2e8f0] mb-2">人才池为空</h2>
-              <p className="text-sm text-[#94a3b8] mb-6">
-                当候选人被标记为「放入人才池」时，会显示在这里
-              </p>
-            </>
-          ) : (
-            <>
-              <Users className="w-12 h-12 mb-4 text-[#3b82f6]" />
-              <h2 className="text-lg font-medium text-[#e2e8f0] mb-2">暂无候选人</h2>
-              <p className="text-sm text-[#94a3b8] mb-6">
-                点击「新建候选人」添加第一位候选人
-              </p>
-              <Button
-                onClick={() => {
-                  setEditingCandidate(null);
-                  setFormOpen(true);
+          <Users className="w-12 h-12 mb-4 text-[#3b82f6]" />
+          <h2 className="text-lg font-medium text-[#e2e8f0] mb-2">人才库为空</h2>
+          <p className="text-sm text-[#94a3b8] mb-6">
+            点击「新建人才」添加第一位储备人才
+          </p>
+          <Button
+            onClick={() => {
+              setEditingCandidate(null);
+              setFormOpen(true);
                 }}
                 className="bg-[#3b82f6] hover:bg-[#2563eb] text-white"
               >
                 <Plus className="w-4 h-4 mr-2" />
-                新建候选人
+                新建人才
               </Button>
-            </>
-          )}
         </div>
       )}
 
-      {/* Candidates Grid */}
+      {/* Candidates Table */}
       {candidates.length > 0 && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {candidates.map((candidate) => (
-              <div key={candidate.id} className="relative group">
-                {/* Selection Checkbox */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleCandidateSelection(candidate.id);
-                  }}
-                  className={`absolute top-3 left-3 z-10 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
-                    selectedCandidates.has(candidate.id)
-                      ? 'bg-[#3b82f6] border-[#3b82f6] text-white'
-                      : 'border-[#4a4d55] bg-[#1a1d24]/80 opacity-0 group-hover:opacity-100 hover:border-[#3b82f6]'
-                  }`}
-                >
-                  {selectedCandidates.has(candidate.id) && (
-                    <CheckSquare className="w-4 h-4" />
-                  )}
-                </button>
-                <CandidateCard
-                  candidate={candidate}
-                  onEdit={() => handleEdit(candidate)}
-                  onDelete={() => handleDelete(candidate)}
-                  onClick={handleViewDetail}
-                  showTalentPoolBadge={viewMode === 'all'}
-                />
-              </div>
-            ))}
+          <div className="rounded-xl border border-[#2a2d35] bg-[#1a1d24] overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#2a2d35] bg-[#0f1117]">
+                  <th className="px-4 py-3 text-left">
+                    <button
+                      onClick={toggleSelectAll}
+                      className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                        selectedCandidates.size === candidates.length && candidates.length > 0
+                          ? 'bg-[#3b82f6] border-[#3b82f6] text-white'
+                          : 'border-[#4a4d55] hover:border-[#3b82f6]'
+                      }`}
+                    >
+                      {selectedCandidates.size === candidates.length && candidates.length > 0 && (
+                        <CheckSquare className="w-3 h-3" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-[#94a3b8]">姓名</th>
+                  <th className="px-4 py-3 text-left font-medium text-[#94a3b8]">手机号</th>
+                  <th className="px-4 py-3 text-left font-medium text-[#94a3b8]">邮箱</th>
+                  <th className="px-4 py-3 text-left font-medium text-[#94a3b8]">当前公司</th>
+                  <th className="px-4 py-3 text-left font-medium text-[#94a3b8]">当前职位</th>
+                  <th className="px-4 py-3 text-left font-medium text-[#94a3b8]">学历</th>
+                  <th className="px-4 py-3 text-left font-medium text-[#94a3b8]">工作年限</th>
+                  <th className="px-4 py-3 text-left font-medium text-[#94a3b8]">来源</th>
+                  <th className="px-4 py-3 text-right font-medium text-[#94a3b8]">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {candidates.map((candidate) => {
+                  const candidateTags = tags.filter((t) => candidate.tags.includes(t.id));
+                  const sourceLabel: Record<string, string> = {
+                    manual: '手动录入',
+                    import: '批量导入',
+                    referral: '内部推荐',
+                  };
+                  return (
+                    <tr
+                      key={candidate.id}
+                      className="border-b border-[#2a2d35] last:border-0 hover:bg-[#22252d] cursor-pointer transition-colors"
+                      onClick={() => handleViewDetail(candidate)}
+                    >
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleCandidateSelection(candidate.id);
+                          }}
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                            selectedCandidates.has(candidate.id)
+                              ? 'bg-[#3b82f6] border-[#3b82f6] text-white'
+                              : 'border-[#4a4d55] hover:border-[#3b82f6]'
+                          }`}
+                        >
+                          {selectedCandidates.has(candidate.id) && (
+                            <CheckSquare className="w-3 h-3" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 font-medium text-[#e2e8f0]">{candidate.name}</td>
+                      <td className="px-4 py-3 text-[#94a3b8]">{candidate.phone || '-'}</td>
+                      <td className="px-4 py-3 text-[#94a3b8]">{candidate.email || '-'}</td>
+                      <td className="px-4 py-3 text-[#94a3b8]">{candidate.currentCompany || '-'}</td>
+                      <td className="px-4 py-3 text-[#94a3b8]">{candidate.currentPosition || '-'}</td>
+                      <td className="px-4 py-3 text-[#94a3b8]">{candidate.education || '-'}</td>
+                      <td className="px-4 py-3 text-[#94a3b8]">{candidate.yearsExp != null ? `${candidate.yearsExp}年` : '-'}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-[#2a2d35] text-[#94a3b8]">
+                          {sourceLabel[candidate.source] ?? candidate.source}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {/* Quick follow-up */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenFollowUp(candidate);
+                            }}
+                            className="p-1.5 rounded-md text-[#10b981] hover:text-[#34d399] hover:bg-[#10b981]/10 transition-colors"
+                            title="快速跟进"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
+                          {/* More menu */}
+                          <div className="relative group">
+                            <button className="p-1.5 rounded-md text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#2a2d35] transition-colors" title="更多">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </button>
+                            <div className="absolute right-0 bottom-full mb-1 hidden group-hover:block z-20 w-36 rounded-lg border border-[#2a2d35] bg-[#1a1d24] py-1 shadow-lg">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setRecommendSingle(candidate); setRecommendOpen(true); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[#e2e8f0] hover:bg-[#2a2d35] transition-colors"
+                              >
+                                <UserPlus className="w-3.5 h-3.5 text-[#8b5cf6]" />推荐到职位
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleEdit(candidate); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[#e2e8f0] hover:bg-[#2a2d35] transition-colors"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />编辑
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDelete(candidate); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-[#2a2d35] transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />删除
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
           {/* Pagination */}
@@ -711,13 +775,31 @@ function TalentPool() {
       {/* Recommend to Job Dialog */}
       <RecommendToJobDialog
         open={recommendOpen}
-        onOpenChange={setRecommendOpen}
-        candidates={getSelectedCandidatesList()}
+        onOpenChange={(v) => { setRecommendOpen(v); if (!v) setRecommendSingle(null); }}
+        candidates={recommendSingle ? [recommendSingle] : getSelectedCandidatesList()}
         onSuccess={() => {
           clearSelection();
+          setRecommendSingle(null);
           fetchCandidates();
+          // Don't close detail panel - CandidateDetail refreshes internally via refreshKey
         }}
       />
+
+      {/* Follow-up Dialog */}
+      {followUpTarget && (
+        <FollowUpDialog
+          open={followUpDialogOpen}
+          onOpenChange={setFollowUpDialogOpen}
+          candidateId={followUpTarget.id}
+          candidateName={followUpTarget.name}
+          pipelineJobs={followUpPipelineJobs}
+          onSuccess={() => {
+            setFollowUpDialogOpen(false);
+            setFollowUpTarget(null);
+            fetchCandidates();
+          }}
+        />
+      )}
     </PageLayout>
   );
 }

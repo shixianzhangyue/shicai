@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "TalentVault",
+  "productName": "Shicore",
   "version": "0.1.0",
   "identifier": "com.talentvault.app",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "TalentVault",
+        "title": "拾才",
         "width": 1280,
         "height": 800,
         "minWidth": 900,
@@ -24,11 +24,11 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://api.openai.com https://aip.baidubce.com https://dashscope.aliyuncs.com https://token-plan-cn.xiaomimimo.com http://localhost:*",
       "capabilities": [
         {
           "identifier": "default",
-          "description": "Default permissions for TalentVault",
+          "description": "Default permissions for Shicore",
           "windows": ["main"],
           "permissions": [
             "core:default",
@@ -40,10 +40,9 @@
             "fs:allow-appdata-write",
             "fs:allow-read-dir",
             "fs:allow-write-file",
-            "fs:allow-read-file",
+            { "identifier": "fs:allow-read-file", "allow": [{ "path": "$APPDATA/**" }] },
             "fs:allow-copy-file",
-            "fs:allow-remove",
-            "shell:default"
+            { "identifier": "fs:allow-remove", "allow": [{ "path": "$APPDATA/**" }] }
           ]
         }
       ]

@@ -1,122 +1,176 @@
-import type { Candidate } from '@/types';
-import { useTagStore } from '@/stores/tagStore';
-import { Pencil, Trash2, Archive } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { api } from '@/lib/api';
+import type { CandidateWithPipeline, ResumeRecord } from '@/types';
+import { CheckSquare, Square, Star, Briefcase, GraduationCap, Calendar, MessageSquare, XCircle } from 'lucide-react';
 
 interface CandidateCardProps {
-  candidate: Candidate;
-  onEdit: (candidate: Candidate) => void;
-  onDelete: (candidate: Candidate) => void;
-  onClick?: (candidate: Candidate) => void;
-  showTalentPoolBadge?: boolean;
+  candidate: CandidateWithPipeline;
+  selected: boolean;
+  onSelect: (pipelineId: string, selected: boolean) => void;
+  onDetail: () => void;
+  onFollowUp: () => void;
+  onReject: (pipelineId: string) => void;
 }
 
-function CandidateCard({ candidate, onEdit, onDelete, onClick, showTalentPoolBadge }: CandidateCardProps) {
-  const tags = useTagStore((s) => s.tags);
-  const candidateTags = tags.filter((t) => candidate.tags.includes(t.id));
+interface WorkExp {
+  company?: string;
+  position?: string;
+  duration?: string;
+  description?: string;
+}
 
-  const sourceLabel: Record<string, string> = {
-    manual: '手动录入',
-    import: '批量导入',
-    referral: '内部推荐',
+interface EduInfo {
+  school?: string;
+  institution?: string;
+  major?: string;
+  degree?: string;
+  duration?: string;
+}
+
+export function CandidateCard({
+  candidate,
+  selected,
+  onSelect,
+  onDetail,
+  onFollowUp,
+  onReject,
+}: CandidateCardProps) {
+  const [resumes, setResumes] = useState<ResumeRecord[]>([]);
+
+  useEffect(() => {
+    api.resumeParser.list(candidate.candidateId).then(setResumes).catch(() => {});
+  }, [candidate.candidateId]);
+
+  // Parse work experience and education from resume
+  let workExps: WorkExp[] = [];
+  let eduList: EduInfo[] = [];
+  try {
+    if (resumes.length > 0 && resumes[0].parsedJson) {
+      const parsed = JSON.parse(resumes[0].parsedJson);
+      workExps = parsed.workExperiences || [];
+      eduList = parsed.educationHistory || [];
+    }
+  } catch {}
+
+  // Fallback: try candidate fields
+  if (workExps.length === 0 && candidate.workExperiences) {
+    try { workExps = JSON.parse(candidate.workExperiences || '[]'); } catch {}
+  }
+  if (eduList.length === 0 && candidate.educationHistory) {
+    try { eduList = JSON.parse(candidate.educationHistory || '[]'); } catch {}
+  }
+
+  const formatDate = (d: string | null) => {
+    if (!d) return '';
+    try { return new Date(d).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit' }); } catch { return d; }
   };
 
   return (
     <div
-      onClick={() => onClick?.(candidate)}
-      className={`relative flex flex-col rounded-xl border border-[#2a2d35] bg-[#1a1d24] p-5 transition-colors hover:border-[#3b82f6]/30 ${onClick ? 'cursor-pointer' : ''}`}
+      className="rounded-xl border border-[#2a2d35] bg-[#0f1117] p-4 hover:border-[#3b82f6]/30 transition-colors cursor-pointer"
+      onClick={onDetail}
     >
-      {/* Talent Pool Badge */}
-      {showTalentPoolBadge && candidate.inTalentPool && (
-        <div className="absolute top-3 right-3">
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-[#8b5cf6]/20 text-[#8b5cf6] border border-[#8b5cf6]/30">
-            <Archive className="w-3 h-3" />
-            人才池
-          </span>
-        </div>
-      )}
-
       {/* Header */}
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <h3 className="text-base font-semibold text-[#e2e8f0] line-clamp-1" title={candidate.name}>
-          {candidate.name}
-        </h3>
-        <span className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium bg-[#2a2d35] text-[#94a3b8]">
-          {sourceLabel[candidate.source] ?? candidate.source}
-        </span>
-      </div>
+      <div className="flex items-start gap-3">
+        <button
+          onClick={(e) => { e.stopPropagation(); onSelect(candidate.pipelineId, !selected); }}
+          className="mt-0.5 text-[#94a3b8] hover:text-[#3b82f6]"
+        >
+          {selected ? <CheckSquare className="w-4 h-4 text-[#3b82f6]" /> : <Square className="w-4 h-4" />}
+        </button>
 
-      {/* Meta info */}
-      <div className="mb-3 space-y-1.5">
-        {candidate.phone && (
-          <p className="text-sm text-[#94a3b8]">
-            <span className="text-[#64748b]">手机：</span>
-            {candidate.phone}
-          </p>
-        )}
-        {candidate.email && (
-          <p className="text-sm text-[#94a3b8]">
-            <span className="text-[#64748b]">邮箱：</span>
-            {candidate.email}
-          </p>
-        )}
-        {(candidate.currentCompany || candidate.currentPosition) && (
-          <p className="text-sm text-[#94a3b8]">
-            <span className="text-[#64748b]">在职：</span>
-            {candidate.currentCompany}
-            {candidate.currentCompany && candidate.currentPosition && ' · '}
-            {candidate.currentPosition}
-          </p>
-        )}
-        <div className="flex flex-wrap gap-x-4 gap-y-1">
-          {candidate.education && (
-            <p className="text-sm text-[#94a3b8]">
-              <span className="text-[#64748b]">学历：</span>
-              {candidate.education}
-            </p>
+        <div className="w-9 h-9 rounded-full bg-[#2a2d35] flex items-center justify-center shrink-0">
+          {candidate.avatarUrl ? (
+            <img src={candidate.avatarUrl} alt={candidate.name} className="w-9 h-9 rounded-full object-cover" />
+          ) : (
+            <span className="text-sm font-medium text-[#e2e8f0]">{candidate.name.charAt(0)}</span>
           )}
-          {candidate.yearsExp !== null && candidate.yearsExp !== undefined && (
-            <p className="text-sm text-[#94a3b8]">
-              <span className="text-[#64748b]">年限：</span>
-              {candidate.yearsExp} 年
-            </p>
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-[#e2e8f0]">{candidate.name}</span>
+            {candidate.age && <span className="text-xs text-[#64748b]">{candidate.age}岁</span>}
+            {candidate.yearsExp != null && (
+              <span className="text-xs text-[#64748b]">· {candidate.yearsExp}年工作经验</span>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {candidate.status === 'active' && (
+            <button
+              onClick={() => onReject(candidate.pipelineId)}
+              className="p-1.5 rounded-md text-[#94a3b8] hover:text-red-400 hover:bg-red-400/10 transition-colors"
+              title="终止投递"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
           )}
+          <button
+            onClick={onFollowUp}
+            className="p-1.5 rounded-md text-[#94a3b8] hover:text-[#8b5cf6] hover:bg-[#8b5cf6]/10 transition-colors"
+            title="备注"
+          >
+            <MessageSquare className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      {/* Tags */}
-      {candidateTags.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-1.5">
-          {candidateTags.map((tag) => (
-            <span
-              key={tag.id}
-              className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium text-white"
-              style={{ backgroundColor: tag.color }}
-            >
-              {tag.name}
-            </span>
+      {/* Work experience */}
+      {workExps.length > 0 && (
+        <div className="mt-3 ml-12 space-y-1.5">
+          {workExps.slice(0, 2).map((we, idx) => (
+            <div key={idx} className="flex items-center gap-2 text-xs text-[#94a3b8]">
+              <Briefcase className="w-3 h-3 shrink-0 text-[#64748b]" />
+              <span className="truncate">{we.duration || ''}</span>
+              <span className="text-[#64748b]">·</span>
+              <span className="truncate">{we.company || ''} · {we.position || ''}</span>
+            </div>
           ))}
         </div>
       )}
 
-      {/* Actions */}
-      <div className="mt-auto flex items-center justify-end gap-1 pt-3 border-t border-[#2a2d35]">
-        <button
-          onClick={() => onEdit(candidate)}
-          className="p-1.5 rounded-md text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#2a2d35] transition-colors"
-          title="编辑"
-        >
-          <Pencil className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => onDelete(candidate)}
-          className="p-1.5 rounded-md text-[#94a3b8] hover:text-red-400 hover:bg-[#2a2d35] transition-colors"
-          title="删除"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+      {/* Education */}
+      {eduList.length > 0 && (
+        <div className="mt-1.5 ml-12">
+          {eduList.slice(0, 1).map((edu, idx) => (
+            <div key={idx} className="flex items-center gap-2 text-xs text-[#94a3b8]">
+              <GraduationCap className="w-3 h-3 shrink-0 text-[#64748b]" />
+              <span className="truncate">{edu.school || edu.institution || ''}</span>
+              <span className="text-[#64748b]">·</span>
+              <span className="truncate">{edu.major || edu.degree || ''}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Pipeline info */}
+      <div className="mt-3 ml-12 flex items-center gap-4 text-xs">
+        <div className="flex items-center gap-1.5 text-[#94a3b8]">
+          <Briefcase className="w-3 h-3 text-[#64748b]" />
+          <span>投递职位: <span className="text-[#e2e8f0]">{candidate.jobTitle}</span></span>
+        </div>
+        {candidate.appliedAt && (
+          <div className="flex items-center gap-1.5 text-[#94a3b8]">
+            <Calendar className="w-3 h-3 text-[#64748b]" />
+            <span>{formatDate(candidate.appliedAt)} 申请</span>
+          </div>
+        )}
+      </div>
+
+      {/* Stage */}
+      <div className="mt-1.5 ml-12 flex items-center gap-4 text-xs">
+        <div className="flex items-center gap-1.5 text-[#94a3b8]">
+          <span>面试结论: <span className="text-[#e2e8f0]">{candidate.currentStageName || '未安排'}</span></span>
+        </div>
+        {candidate.interviewConclusion && (
+          <div className="flex items-center gap-1.5 text-[#94a3b8]">
+            <span>最近备注: <span className="text-[#e2e8f0] truncate max-w-[150px]">{candidate.interviewConclusion}</span></span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-export default CandidateCard;

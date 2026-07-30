@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Pencil, Trash2, Star, Check, X, Eye, EyeOff } from 'lucide-react';
+import { confirm } from '@/components/ui/ConfirmDialog';
 
 interface LlmConfigCardProps {
   config: LlmConfig;
@@ -50,7 +51,7 @@ function LlmConfigCard({ config, onSetDefault }: LlmConfigCardProps) {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm('确定要删除此配置吗？')) return;
+    if (!await confirm('确定要删除此配置吗？')) return;
     setDeleting(true);
     try {
       await deleteConfig(config.id);

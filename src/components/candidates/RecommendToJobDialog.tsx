@@ -11,8 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Loader2, UserPlus, Briefcase, CheckCircle2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { notify } from '@/lib/notify';
 import type { Candidate, Job } from '@/types';
-import { useUIStore } from '@/stores/uiStore';
 
 interface RecommendToJobDialogProps {
   open: boolean;
@@ -32,7 +32,7 @@ export function RecommendToJobDialog({
   const [loading, setLoading] = useState(false);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [results, setResults] = useState<{ success: number; failed: number } | null>(null);
-  const { showToast } = useUIStore();
+  const showToast = (msg: string, type: 'success' | 'error') => notify[type](msg);
 
   // Load jobs when dialog opens
   useEffect(() => {
@@ -48,7 +48,7 @@ export function RecommendToJobDialog({
     try {
       const jobList = await api.jobs.list();
       // Only show active jobs
-      setJobs(jobList.filter((j) => j.status === 'active'));
+      setJobs(jobList.filter((j) => j.status === 'open' || j.status === 'paused'));
     } catch (error) {
       showToast('加载职位列表失败', 'error');
     } finally {
@@ -69,16 +69,19 @@ export function RecommendToJobDialog({
     // Process candidates sequentially to avoid race conditions
     for (const candidate of candidates) {
       try {
+        // Use api.pipeline.addToJob which properly converts camelCase to snake_case
         await api.pipeline.addToJob(candidate.id, selectedJobId);
         successCount++;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
+        notify.error(`Failed to recommend ${candidate.name}`);
+        alert(`推荐失败: ${candidate.name}\n${msg}`);
         // If candidate is already in job, count as success
         if (msg.includes('already') || msg.includes('已存在')) {
           successCount++;
         } else {
           failedCount++;
-          console.error(`Failed to recommend ${candidate.name}:`, error);
+          notify.error(`Failed to recommend ${candidate.name}`);
         }
       }
     }

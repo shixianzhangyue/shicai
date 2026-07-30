@@ -6,7 +6,11 @@ use thiserror::Error;
 
 use crate::services::prompt::{RESUME_PARSE_PROMPT, AI_ENHANCE_PROMPT};
 
-const SALT: &[u8] = b"TalentVaultStep24";
+/// Encryption key for AES-256-GCM. In production, this should be loaded from
+/// a secure source (environment variable, keyring, or hardware security module).
+/// For now, we use a hardcoded key but with proper AES-GCM encryption.
+/// TODO: Load from environment variable or system keyring in production.
+const ENCRYPTION_KEY: &[u8; 32] = b"TalentVault-AES256-GCM-Key-2026!";
 
 /// Errors that can occur during LLM client operations.
 #[derive(Debug, Error)]
@@ -83,6 +87,152 @@ impl FromStr for Provider {
             _ => Err(format!("Unknown provider: {}", s)),
         }
     }
+}
+
+/// Validates that a base URL is safe (HTTPS, not internal network).
+/// SECURITY: Prevents SSRF by blocking private/internal IPs.
+fn validate_base_url(url: &str) -> Result<(), String> {
+    let parsed = reqwest::Url::parse(url)
+        .map_err(|_| format!("Invalid URL: {}", url))?;
+
+    // Only allow HTTPS
+    if parsed.scheme() != "https" {
+        return Err("Only HTTPS URLs are allowed for LLM base URLs".to_string());
+    }
+
+    // Block private/internal IPs (RFC 1918 + RFC 4193 + special ranges)
+    if let Some(host) = parsed.host_str() {
+        // Block localhost and loopback
+        if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+            return Err("Internal/private network URLs are not allowed".to_string());
+        }
+
+        // Parse IPv4 addresses
+        if let Ok(ip) = host.parse::<std::net::Ipv4Addr>() {
+            let octets = ip.octets();
+
+            // 0.0.0.0/8 - Current network (RFC 1122)
+            if octets[0] == 0 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 10.0.0.0/8 - Private network (RFC 1918)
+            if octets[0] == 10 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 100.64.0.0/10 - Shared Address Space (RFC 6598)
+            if octets[0] == 100 && (octets[1] & 0xC0) == 64 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 127.0.0.0/8 - Loopback (RFC 1122)
+            if octets[0] == 127 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 169.254.0.0/16 - Link-local (RFC 3927)
+            if octets[0] == 169 && octets[1] == 254 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 172.16.0.0/12 - Private network (RFC 1918)
+            if octets[0] == 172 && (octets[1] & 0xF0) == 16 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 192.0.0.0/24 - IETF Protocol Assignments (RFC 5736)
+            if octets[0] == 192 && octets[1] == 0 && octets[2] == 0 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 192.0.2.0/24 - TEST-NET-1 (RFC 5737)
+            if octets[0] == 192 && octets[1] == 0 && octets[2] == 2 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 192.88.99.0/24 - 6to4 Relay Anycast (RFC 3068)
+            if octets[0] == 192 && octets[1] == 88 && octets[2] == 99 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 192.168.0.0/16 - Private network (RFC 1918)
+            if octets[0] == 192 && octets[1] == 168 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 198.18.0.0/15 - Benchmarking (RFC 2544)
+            if octets[0] == 198 && (octets[1] & 0xFE) == 18 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 198.51.100.0/24 - TEST-NET-2 (RFC 5737)
+            if octets[0] == 198 && octets[1] == 51 && octets[2] == 100 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 203.0.113.0/24 - TEST-NET-3 (RFC 5737)
+            if octets[0] == 203 && octets[1] == 0 && octets[2] == 113 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 224.0.0.0/4 - Multicast (RFC 3171)
+            if (octets[0] & 0xF0) == 224 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 240.0.0.0/4 - Reserved (RFC 1112)
+            if (octets[0] & 0xF0) == 240 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // 255.255.255.255/32 - Limited Broadcast (RFC 919)
+            if octets == [255, 255, 255, 255] {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+        }
+
+        // Parse IPv6 addresses
+        if let Ok(ip) = host.parse::<std::net::Ipv6Addr>() {
+            // Block IPv6 loopback
+            if ip.is_loopback() {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // Block IPv6 link-local (fe80::/10)
+            if (ip.segments()[0] & 0xFFC0) == 0xFE80 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // Block IPv6 unique local (fc00::/7)
+            if (ip.segments()[0] & 0xFE00) == 0xFC00 {
+                return Err("Internal/private network URLs are not allowed".to_string());
+            }
+
+            // Block IPv4-mapped IPv6 addresses (::ffff:0:0/96)
+            if ip.segments()[0] == 0
+                && ip.segments()[1] == 0
+                && ip.segments()[2] == 0
+                && ip.segments()[3] == 0
+                && ip.segments()[4] == 0
+                && ip.segments()[5] == 0xFFFF
+            {
+                // Extract the IPv4 part and check it
+                let ipv4_octets = [
+                    (ip.segments()[6] >> 8) as u8,
+                    (ip.segments()[6] & 0xFF) as u8,
+                    (ip.segments()[7] >> 8) as u8,
+                    (ip.segments()[7] & 0xFF) as u8,
+                ];
+                let ipv4 = std::net::Ipv4Addr::from(ipv4_octets);
+                // Recursively validate the IPv4 address
+                let ipv4_url = format!("https://{}", ipv4);
+                validate_base_url(&ipv4_url)?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Configuration for connecting to an LLM provider.
@@ -180,6 +330,12 @@ impl LlmClient {
             .build()
             .map_err(|e| LlmError::ApiError(e.to_string()))?;
 
+        // SECURITY: Validate base URL to prevent SSRF
+        validate_base_url(&config.base_url).map_err(LlmError::ApiError)?;
+
+        // SECURITY: Validate base URL to prevent SSRF
+        validate_base_url(&config.base_url).map_err(LlmError::ApiError)?;
+
         let url = format!("{}/chat/completions", config.base_url.trim_end_matches('/'));
         let api_key = deobfuscate_key(&config.api_key);
 
@@ -219,6 +375,9 @@ impl LlmClient {
             .timeout(Duration::from_secs(30))
             .build()
             .map_err(|e| LlmError::ApiError(e.to_string()))?;
+
+        // SECURITY: Validate base URL to prevent SSRF
+        validate_base_url(&config.base_url).map_err(LlmError::ApiError)?;
 
         let url = format!("{}/chat/completions", config.base_url.trim_end_matches('/'));
         let api_key = deobfuscate_key(&config.api_key);
@@ -354,6 +513,9 @@ impl LlmClient {
             .timeout(Duration::from_secs(60))
             .build()
             .map_err(|e| LlmError::ApiError(e.to_string()))?;
+
+        // SECURITY: Validate base URL to prevent SSRF
+        validate_base_url(&config.base_url).map_err(LlmError::ApiError)?;
 
         let url = format!("{}/chat/completions", config.base_url.trim_end_matches('/'));
         let api_key = deobfuscate_key(&config.api_key);
@@ -518,78 +680,56 @@ impl LlmClient {
     }
 }
 
-/// Obfuscates an API key using XOR with a rotating salt.
+/// Encrypts an API key using AES-256-GCM.
+/// Returns a base64-encoded string containing the nonce + ciphertext + tag.
 pub fn obfuscate_key(key: &str) -> String {
-    let bytes = key.as_bytes();
-    let mut obfuscated = Vec::with_capacity(bytes.len());
-    for (i, &b) in bytes.iter().enumerate() {
-        obfuscated.push(b ^ SALT[i % SALT.len()]);
-    }
-    base64::encode(&obfuscated)
+    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+    use aes_gcm::aead::Aead;
+    use base64::Engine;
+    use rand::RngCore;
+
+    // ENCRYPTION_KEY is a fixed 32-byte array, so constructing the cipher is
+    // infallible — no expect() needed.
+    let cipher = Aes256Gcm::new(aes_gcm::Key::<Aes256Gcm>::from_slice(ENCRYPTION_KEY));
+
+    // Generate a random 12-byte nonce
+    let mut nonce_bytes = [0u8; 12];
+    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    // AES-GCM encryption into an unbounded Vec is infallible for in-memory data.
+    let ciphertext = cipher
+        .encrypt(nonce, key.as_bytes())
+        .expect("AES-GCM encryption of in-memory data is infallible");
+
+    // Combine nonce + ciphertext and encode as base64
+    let mut combined = Vec::with_capacity(12 + ciphertext.len());
+    combined.extend_from_slice(&nonce_bytes);
+    combined.extend_from_slice(&ciphertext);
+
+    base64::engine::general_purpose::STANDARD.encode(&combined)
 }
 
-/// Deobfuscates an API key that was obfuscated with `obfuscate_key`.
+/// Deobfuscates an API key that was encrypted with `obfuscate_key`.
 pub fn deobfuscate_key(key: &str) -> String {
-    let bytes = base64::decode(key).unwrap_or_default();
-    let mut deobfuscated = Vec::with_capacity(bytes.len());
-    for (i, &b) in bytes.iter().enumerate() {
-        deobfuscated.push(b ^ SALT[i % SALT.len()]);
-    }
-    String::from_utf8(deobfuscated).unwrap_or_default()
-}
+    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+    use aes_gcm::aead::Aead;
+    use base64::Engine;
 
-// Simple base64 implementation to avoid extra dependency.
-mod base64 {
-    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let combined = base64::engine::general_purpose::STANDARD.decode(key).unwrap_or_default();
 
-    pub fn encode(input: &[u8]) -> String {
-        let mut result = String::new();
-        let mut i = 0;
-        while i < input.len() {
-            let b1 = input[i];
-            let b2 = if i + 1 < input.len() { input[i + 1] } else { 0 };
-            let b3 = if i + 2 < input.len() { input[i + 2] } else { 0 };
-
-            let idx1 = (b1 >> 2) as usize;
-            let idx2 = (((b1 & 0b11) << 4) | (b2 >> 4)) as usize;
-            let idx3 = (((b2 & 0b1111) << 2) | (b3 >> 6)) as usize;
-            let idx4 = (b3 & 0b111111) as usize;
-
-            result.push(ALPHABET[idx1] as char);
-            result.push(ALPHABET[idx2] as char);
-            if i + 1 < input.len() {
-                result.push(ALPHABET[idx3] as char);
-            } else {
-                result.push('=');
-            }
-            if i + 2 < input.len() {
-                result.push(ALPHABET[idx4] as char);
-            } else {
-                result.push('=');
-            }
-            i += 3;
-        }
-        result
+    // Need at least 12 bytes for nonce + some ciphertext
+    if combined.len() < 12 {
+        return String::new();
     }
 
-    pub fn decode(input: &str) -> Result<Vec<u8>, String> {
-        let mut result = Vec::new();
-        let mut buffer = 0u32;
-        let mut bits_collected = 0;
+    let (nonce_bytes, ciphertext) = combined.split_at(12);
+    let nonce = Nonce::from_slice(nonce_bytes);
 
-        for ch in input.chars() {
-            if ch == '=' {
-                break;
-            }
-            let val = ALPHABET.iter().position(|&b| b == ch as u8).ok_or("Invalid base64 character")? as u32;
-            buffer = (buffer << 6) | val;
-            bits_collected += 6;
+    let cipher = Aes256Gcm::new(aes_gcm::Key::<Aes256Gcm>::from_slice(ENCRYPTION_KEY));
 
-            if bits_collected >= 8 {
-                bits_collected -= 8;
-                result.push((buffer >> bits_collected) as u8);
-            }
-        }
-        Ok(result)
+    match cipher.decrypt(nonce, ciphertext) {
+        Ok(plaintext) => String::from_utf8(plaintext).unwrap_or_default(),
+        Err(_) => String::new(),
     }
 }

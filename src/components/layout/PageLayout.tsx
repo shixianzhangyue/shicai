@@ -15,6 +15,7 @@ const pathLabelMap: Record<string, string> = {
   dashboard: "仪表盘",
   jobs: "职位管理",
   "talent-pool": "人才库",
+  "recycle-bin": "回收站",
   settings: "设置",
 };
 

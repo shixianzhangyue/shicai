@@ -3,6 +3,7 @@ import type { PipelineStage, PipelineEntry } from '@/types';
 import { usePipelineStore } from '@/stores/pipelineStore';
 import { api } from '@/lib/api';
 import { useDebounce } from '@/hooks/useDebounce';
+import { notify } from '@/lib/notify';
 import { Button } from '@/components/ui/button';
 import {
   MoreHorizontal,
@@ -51,7 +52,7 @@ function KanbanBoard({ jobId, stages, entries, onRefresh }: KanbanBoardProps) {
           onRefresh();
         } catch (err) {
           setOptimisticEntries(null);
-          console.error('Failed to move candidate:', err);
+          notify.error('Failed to move candidate');
         } finally {
           setLoadingIds((prev) => {
             const next = new Set(prev);
@@ -103,7 +104,7 @@ function KanbanBoard({ jobId, stages, entries, onRefresh }: KanbanBoardProps) {
       await rejectCandidate(pipelineId);
       onRefresh();
     } catch (err) {
-      console.error('Failed to reject candidate:', err);
+      notify.error('Failed to reject candidate');
     }
   };
 
@@ -112,7 +113,7 @@ function KanbanBoard({ jobId, stages, entries, onRefresh }: KanbanBoardProps) {
       await poolCandidate(pipelineId);
       onRefresh();
     } catch (err) {
-      console.error('Failed to pool candidate:', err);
+      notify.error('Failed to pool candidate');
     }
   };
 
@@ -169,7 +170,7 @@ function KanbanBoard({ jobId, stages, entries, onRefresh }: KanbanBoardProps) {
       clearSelection();
       onRefresh();
     } catch (err) {
-      console.error('Batch action failed:', err);
+      notify.error('Batch action failed');
     } finally {
       setBatchConfirmOpen(false);
       setBatchAction(null);

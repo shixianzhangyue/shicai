@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
+import { notify } from '@/lib/notify';
 import type { RelationType, Candidate } from '@/types';
 import { User, Link2, Trash2, Plus, X, UserPlus } from 'lucide-react';
+import { confirm } from '@/components/ui/ConfirmDialog';
 
 interface RelationsTabProps {
   candidateId: string;
@@ -58,7 +60,7 @@ export function RelationsTab({ candidateId }: RelationsTabProps) {
       const data = await api.relations.list(candidateId);
       setRelations(data as RelationItem[]);
     } catch (err) {
-      console.error('Failed to fetch relations:', err);
+      notify.error('Failed to fetch relations');
     } finally {
       setLoading(false);
     }
@@ -82,7 +84,7 @@ export function RelationsTab({ candidateId }: RelationsTabProps) {
       );
       setSearchResults(filtered.slice(0, 5));
     } catch (err) {
-      console.error('Search failed:', err);
+      notify.error('Search failed');
     }
   };
 
@@ -103,17 +105,17 @@ export function RelationsTab({ candidateId }: RelationsTabProps) {
       setNote('');
       fetchRelations();
     } catch (err) {
-      console.error('Failed to create relation:', err);
+      notify.error('Failed to create relation');
     }
   };
 
   const handleDelete = async (relationId: string) => {
-    if (!window.confirm('确定要删除这条关系吗？')) return;
+    if (!await confirm('确定要删除这条关系吗？')) return;
     try {
       await api.relations.delete(relationId);
       fetchRelations();
     } catch (err) {
-      console.error('Failed to delete relation:', err);
+      notify.error('Failed to delete relation');
     }
   };
 

@@ -57,48 +57,49 @@ pub struct PaginatedCandidates {
 const CANDIDATE_COLUMNS: &str = "c.id, c.name, c.phone, c.email, c.current_company, c.current_position, c.education, c.years_exp, c.source, c.tags, c.deleted_at, c.created_at, c.updated_at, EXISTS (SELECT 1 FROM candidate_pipeline cp WHERE cp.candidate_id = c.id AND cp.status = 'pooled') as in_pool, c.gender, c.birth_date, c.expected_city, c.expected_salary, c.graduation_date, c.school, c.major, c.is_starred, c.is_hidden, c.work_experiences, c.education_history, c.source_detail, c.avatar_url, c.age, c.last_active_at";
 
 /// Maps a rusqlite Row to a Candidate struct.
-/// Column order must match CANDIDATE_COLUMNS exactly.
+/// Columns are fetched by name so that inserting/reordering a column in
+/// CANDIDATE_COLUMNS cannot silently shift every index and corrupt the mapping.
 fn map_candidate(row: &rusqlite::Row) -> rusqlite::Result<Candidate> {
-    let tags_str: String = row.get(9)?;
+    let tags_str: String = row.get("tags")?;
     let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
-    let in_pool: bool = row.get(13)?;
-    let is_starred_raw: i32 = row.get(21)?;
-    let is_hidden_raw: i32 = row.get(22)?;
+    let in_pool: bool = row.get("in_pool")?;
+    let is_starred_raw: i32 = row.get("is_starred")?;
+    let is_hidden_raw: i32 = row.get("is_hidden")?;
     Ok(Candidate {
-        id: row.get(0)?,
-        name: row.get(1)?,
-        phone: row.get(2)?,
-        email: row.get(3)?,
-        current_company: row.get(4)?,
-        current_position: row.get(5)?,
-        education: row.get(6)?,
-        years_exp: row.get(7)?,
-        source: row.get(8)?,
+        id: row.get("id")?,
+        name: row.get("name")?,
+        phone: row.get("phone")?,
+        email: row.get("email")?,
+        current_company: row.get("current_company")?,
+        current_position: row.get("current_position")?,
+        education: row.get("education")?,
+        years_exp: row.get("years_exp")?,
+        source: row.get("source")?,
         tags,
         in_talent_pool: in_pool,
-        deleted_at: row.get(10)?,
-        created_at: row.get(11)?,
-        updated_at: row.get(12)?,
-        gender: row.get(14)?,
-        birth_date: row.get(15)?,
-        expected_city: row.get(16)?,
-        expected_salary: row.get(17)?,
-        graduation_date: row.get(18)?,
-        school: row.get(19)?,
-        major: row.get(20)?,
+        deleted_at: row.get("deleted_at")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+        gender: row.get("gender")?,
+        birth_date: row.get("birth_date")?,
+        expected_city: row.get("expected_city")?,
+        expected_salary: row.get("expected_salary")?,
+        graduation_date: row.get("graduation_date")?,
+        school: row.get("school")?,
+        major: row.get("major")?,
         is_starred: is_starred_raw != 0,
         is_hidden: is_hidden_raw != 0,
-        work_experiences: row.get(23)?,
-        education_history: row.get(24)?,
-        source_detail: row.get(25)?,
-        avatar_url: row.get(26)?,
-        age: row.get(27)?,
-        last_active_at: row.get(28)?,
+        work_experiences: row.get("work_experiences")?,
+        education_history: row.get("education_history")?,
+        source_detail: row.get("source_detail")?,
+        avatar_url: row.get("avatar_url")?,
+        age: row.get("age")?,
+        last_active_at: row.get("last_active_at")?,
     })
 }
 
 /// Queries candidates with optional multi-dimensional filters and pagination.
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub fn list_candidates(
     state: tauri::State<DbPool>,
     keyword: Option<String>,
@@ -112,6 +113,7 @@ pub fn list_candidates(
     expected_city: Option<String>,
     gender: Option<String>,
     is_starred: Option<bool>,
+    exclude_active_pipeline: Option<bool>,
     page: Option<i32>,
     page_size: Option<i32>,
     sort_by: Option<String>,
@@ -129,10 +131,17 @@ pub fn list_candidates(
     let offset = (current_page - 1) * size;
 
     // Pre-compute parameter values so references live for the entire function.
-    let keyword_like = keyword.as_ref().filter(|k| !k.is_empty()).map(|k| format!("%{}%", k));
+    // Escape LIKE wildcards to prevent injection
+    let keyword_like = keyword.as_ref().filter(|k| !k.is_empty()).map(|k| {
+        let escaped = k.replace('%', "\\%").replace('_', "\\_");
+        format!("%{}%", escaped)
+    });
     let tag_patterns: Vec<String> = tags
         .as_ref()
-        .map(|t| t.iter().map(|tag| format!("%\"{}\"%", tag)).collect())
+        .map(|t| t.iter().map(|tag| {
+            let escaped = tag.replace('%', "\\%").replace('_', "\\_");
+            format!("%\"{}\"%", escaped)
+        }).collect())
         .unwrap_or_default();
     let education_val = education.filter(|e| !e.is_empty());
     let source_val = source.filter(|s| !s.is_empty());
@@ -193,6 +202,14 @@ pub fn list_candidates(
     if in_talent_pool == Some(true) {
         conditions.push(
             "EXISTS (SELECT 1 FROM candidate_pipeline cp WHERE cp.candidate_id = c.id AND cp.status = 'pooled')"
+                .to_string(),
+        );
+    }
+
+    // Exclude candidates who are in active pipeline (for talent pool view)
+    if exclude_active_pipeline == Some(true) {
+        conditions.push(
+            "NOT EXISTS (SELECT 1 FROM candidate_pipeline cp WHERE cp.candidate_id = c.id AND cp.status = 'active')"
                 .to_string(),
         );
     }
@@ -482,6 +499,13 @@ pub fn update_candidate(
 ) -> Result<Candidate, String> {
     validate_input(&input)?;
 
+    // years_exp is Option<Option<i32>>; validate its range manually here.
+    if let Some(Some(exp)) = input.years_exp {
+        if exp < 0 || exp > 50 {
+            return Err("工作年限应在 0-50 之间".to_string());
+        }
+    }
+
     let conn = state.get().map_err(|e| {
         let msg = format!("Failed to get database connection: {}", e);
         log::error!("{}", msg);
@@ -549,6 +573,9 @@ pub fn update_candidate(
     }
     if input.is_starred.is_some() {
         updates.push("is_starred = ?".to_string());
+    }
+    if input.is_hidden.is_some() {
+        updates.push("is_hidden = ?".to_string());
     }
 
     if updates.is_empty() {
@@ -629,6 +656,11 @@ pub fn update_candidate(
         starred_val = if *v { 1i32 } else { 0i32 };
         param_refs.push(&starred_val);
     }
+    let hidden_val;
+    if let Some(ref v) = input.is_hidden {
+        hidden_val = if *v { 1i32 } else { 0i32 };
+        param_refs.push(&hidden_val);
+    }
     param_refs.push(&now);
     param_refs.push(&id);
 
@@ -681,26 +713,246 @@ pub fn delete_candidate(state: tauri::State<DbPool>, id: String) -> Result<(), S
     let now = Local::now().to_rfc3339();
     let audit_id = nanoid::nanoid!();
 
-    conn.execute(
-        "INSERT INTO audit_logs (id, table_name, record_id, action, old_data, performed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![&audit_id, "candidates", &id, "soft_delete", &old_data, &now],
-    )
-    .map_err(|e| {
-        let msg = format!("Failed to write audit log for candidate deletion {}: {}", id, e);
+    // Wrap the audit-log write and the soft-delete in one transaction so they
+    // either both commit or both roll back (previously they were not atomic).
+    conn.execute("BEGIN TRANSACTION", []).map_err(|e| e.to_string())?;
+
+    let result = (|| -> Result<(), String> {
+        conn.execute(
+            "INSERT INTO audit_logs (id, table_name, record_id, action, old_data, performed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![&audit_id, "candidates", &id, "soft_delete", &old_data, &now],
+        )
+        .map_err(|e| format!("Failed to write audit log for candidate deletion {}: {}", id, e))?;
+
+        conn.execute(
+            "UPDATE candidates SET deleted_at = ?1 WHERE id = ?2",
+            params![&now, &id],
+        )
+        .map_err(|e| format!("Failed to soft-delete candidate {}: {}", id, e))?;
+
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute("COMMIT", []).map_err(|e| e.to_string())?;
+            log::info!("Soft-deleted candidate '{}' (id {})", candidate.name, id);
+            Ok(())
+        }
+        Err(e) => {
+            conn.execute("ROLLBACK", []).ok();
+            log::error!("Failed to soft-delete candidate (id {}): {}", id, e);
+            Err(e)
+        }
+    }
+}
+
+/// Lists soft-deleted candidates for recycle bin.
+#[tauri::command]
+pub fn list_deleted_candidates(
+    state: tauri::State<DbPool>,
+) -> Result<Vec<Candidate>, String> {
+    let conn = state.get().map_err(|e| {
+        let msg = format!("Failed to get database connection: {}", e);
         log::error!("{}", msg);
         msg
     })?;
 
-    conn.execute(
-        "UPDATE candidates SET deleted_at = ?1 WHERE id = ?2",
-        params![&now, &id],
-    )
-    .map_err(|e| {
-        let msg = format!("Failed to soft-delete candidate {}: {}", id, e);
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT {} FROM candidates c WHERE c.deleted_at IS NOT NULL ORDER BY c.deleted_at DESC",
+            CANDIDATE_COLUMNS
+        ))
+        .map_err(|e| {
+            let msg = format!("Failed to prepare list_deleted_candidates query: {}", e);
+            log::error!("{}", msg);
+            msg
+        })?;
+
+    let candidates = stmt
+        .query_map([], map_candidate)
+        .map_err(|e| {
+            let msg = format!("Failed to execute list_deleted_candidates query: {}", e);
+            log::error!("{}", msg);
+            msg
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            let msg = format!("Failed to collect deleted candidates: {}", e);
+            log::error!("{}", msg);
+            msg
+        })?;
+
+    Ok(candidates)
+}
+
+/// Restores a soft-deleted candidate from recycle bin.
+#[tauri::command]
+pub fn restore_candidate(
+    state: tauri::State<DbPool>,
+    id: String,
+) -> Result<(), String> {
+    let conn = state.get().map_err(|e| {
+        let msg = format!("Failed to get database connection: {}", e);
         log::error!("{}", msg);
         msg
     })?;
 
-    log::info!("Soft-deleted candidate '{}' (id {})", candidate.name, id);
+    let rows = conn
+        .execute(
+            "UPDATE candidates SET deleted_at = NULL WHERE id = ?1 AND deleted_at IS NOT NULL",
+            params![&id],
+        )
+        .map_err(|e| {
+            let msg = format!("Failed to restore candidate {}: {}", id, e);
+            log::error!("{}", msg);
+            msg
+        })?;
+
+    if rows == 0 {
+        return Err("该候选人不在回收站中".to_string());
+    }
+
+    log::info!("Restored candidate (id {}) from recycle bin", id);
     Ok(())
+}
+
+/// Permanently deletes a candidate and all related data.
+#[tauri::command]
+pub fn permanently_delete_candidate(
+    state: tauri::State<DbPool>,
+    id: String,
+) -> Result<(), String> {
+    let conn = state.get().map_err(|e| {
+        let msg = format!("Failed to get database connection: {}", e);
+        log::error!("{}", msg);
+        msg
+    })?;
+
+    // Verify candidate is in recycle bin
+    let deleted: Option<String> = conn
+        .query_row(
+            "SELECT id FROM candidates WHERE id = ?1 AND deleted_at IS NOT NULL",
+            params![&id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    if deleted.is_none() {
+        return Err("该候选人不在回收站中，无法永久删除".to_string());
+    }
+
+    // Hard delete all related data in a transaction
+    conn.execute("BEGIN TRANSACTION", []).map_err(|e| e.to_string())?;
+
+    let result = (|| -> Result<(), String> {
+        conn.execute("DELETE FROM candidate_pipeline WHERE candidate_id = ?1", params![&id])
+            .map_err(|e| format!("Failed to delete pipeline entries: {}", e))?;
+        conn.execute("DELETE FROM follow_ups WHERE candidate_id = ?1", params![&id])
+            .map_err(|e| format!("Failed to delete follow-ups: {}", e))?;
+        conn.execute("DELETE FROM candidate_relations WHERE candidate_id_a = ?1 OR candidate_id_b = ?1", params![&id])
+            .map_err(|e| format!("Failed to delete relations: {}", e))?;
+        conn.execute("DELETE FROM resumes WHERE candidate_id = ?1", params![&id])
+            .map_err(|e| format!("Failed to delete resumes: {}", e))?;
+        conn.execute("DELETE FROM portfolios WHERE candidate_id = ?1", params![&id])
+            .map_err(|e| format!("Failed to delete portfolios: {}", e))?;
+        conn.execute("DELETE FROM pipeline_audit_log WHERE candidate_id = ?1", params![&id])
+            .map_err(|e| format!("Failed to delete pipeline audit log: {}", e))?;
+        conn.execute("DELETE FROM candidates WHERE id = ?1", params![&id])
+            .map_err(|e| format!("Failed to delete candidate: {}", e))?;
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute("COMMIT", []).map_err(|e| e.to_string())?;
+            log::info!("Permanently deleted candidate (id {})", id);
+            Ok(())
+        }
+        Err(e) => {
+            conn.execute("ROLLBACK", []).ok();
+            log::error!("Failed to permanently delete candidate (id {}): {}", id, e);
+            Err(e)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup_db() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE candidates (
+                id TEXT PRIMARY KEY, name TEXT, phone TEXT, email TEXT,
+                current_company TEXT, current_position TEXT, education TEXT,
+                years_exp INTEGER, source TEXT, tags TEXT,
+                deleted_at TEXT, created_at TEXT, updated_at TEXT,
+                gender TEXT, birth_date TEXT, expected_city TEXT, expected_salary TEXT,
+                graduation_date TEXT, school TEXT, major TEXT,
+                is_starred INTEGER, is_hidden INTEGER,
+                work_experiences TEXT, education_history TEXT, source_detail TEXT,
+                avatar_url TEXT, age INTEGER, last_active_at TEXT
+            );
+            CREATE TABLE candidate_pipeline (
+                id TEXT PRIMARY KEY, candidate_id TEXT, job_id TEXT,
+                current_stage_id TEXT, status TEXT, entered_at TEXT, updated_at TEXT
+            );",
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn map_candidate_reads_columns_by_name() {
+        let conn = setup_db();
+        conn.execute(
+            "INSERT INTO candidates (id, name, phone, email, source, tags, created_at, updated_at, is_starred, is_hidden, work_experiences, education_history, years_exp)
+             VALUES ('c1', '张三', '13800138000', 'z@example.com', 'manual', '[\"offer\"]', '2026-01-01', '2026-01-01', 1, 0, '[]', '[]', 5)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO candidate_pipeline (id, candidate_id, job_id, current_stage_id, status, entered_at, updated_at)
+             VALUES ('p1', 'c1', NULL, NULL, 'pooled', '2026-01-01', '2026-01-01')",
+            [],
+        )
+        .unwrap();
+
+        let sql = format!("SELECT {} FROM candidates c WHERE c.id = ?1", CANDIDATE_COLUMNS);
+        let c = conn
+            .query_row(&sql, rusqlite::params!["c1"], map_candidate)
+            .unwrap();
+
+        assert_eq!(c.id, "c1");
+        assert_eq!(c.name, "张三");
+        assert_eq!(c.phone.as_deref(), Some("13800138000"));
+        assert_eq!(c.years_exp, Some(5));
+        assert_eq!(c.tags, vec!["offer".to_string()]);
+        assert!(c.is_starred);
+        assert!(!c.is_hidden);
+        assert!(c.in_talent_pool, "candidate with pooled pipeline should be in pool");
+    }
+
+    #[test]
+    fn map_candidate_not_in_pool_when_no_pipeline() {
+        let conn = setup_db();
+        conn.execute(
+            "INSERT INTO candidates (id, name, source, tags, created_at, updated_at, is_starred, is_hidden, work_experiences, education_history)
+             VALUES ('c2', '李四', 'manual', '[]', '2026-01-01', '2026-01-01', 0, 0, '[]', '[]')",
+            [],
+        )
+        .unwrap();
+
+        let sql = format!("SELECT {} FROM candidates c WHERE c.id = ?1", CANDIDATE_COLUMNS);
+        let c = conn
+            .query_row(&sql, rusqlite::params!["c2"], map_candidate)
+            .unwrap();
+
+        assert_eq!(c.id, "c2");
+        assert!(!c.in_talent_pool);
+        assert!(!c.is_starred);
+        assert!(c.tags.is_empty());
+    }
 }

@@ -12,6 +12,13 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
+            // Enable devtools for debugging
+            #[cfg(debug_assertions)]
+            {
+                let window = app.get_webview_window("main").expect("no main window");
+                window.open_devtools();
+            }
+
             let app_handle = app.handle();
             let app_data_dir = app_handle
                 .path()
@@ -53,7 +60,7 @@ pub fn run() {
             // Register pool as Tauri state so commands can access it.
             app.manage(pool);
 
-            log::info!("TalentVault application setup completed successfully");
+            log::info!("Shicore application setup completed successfully");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -63,6 +70,9 @@ pub fn run() {
             commands::candidates::create_candidate,
             commands::candidates::update_candidate,
             commands::candidates::delete_candidate,
+            commands::candidates::list_deleted_candidates,
+            commands::candidates::restore_candidate,
+            commands::candidates::permanently_delete_candidate,
             // ─── Jobs ─────────────────────────────────────
             commands::jobs::create_job,
             commands::jobs::delete_job,
@@ -82,6 +92,7 @@ pub fn run() {
             commands::pipeline::reorder_stages,
             commands::pipeline::init_default_stages,
             commands::pipeline::get_pipeline_by_job,
+            commands::pipeline::get_pipeline_by_candidate,
             commands::pipeline::add_to_job,
             commands::pipeline::move_to_stage,
             commands::pipeline::reject_candidate,
@@ -92,6 +103,8 @@ pub fn run() {
             commands::pipeline::get_stage_stats,
             commands::pipeline::list_candidates_by_job,
             commands::pipeline::get_jobs_with_candidates,
+            commands::pipeline::remove_from_job,
+            commands::pipeline::get_audit_log,
             // ─── Talent Pool ──────────────────────────────
             commands::talent_pool::list_talent_pool,
             commands::talent_pool::reactivate_candidate,
@@ -114,6 +127,8 @@ pub fn run() {
             // ─── Stats ────────────────────────────────────
             commands::stats::get_overview_stats,
             commands::stats::get_funnel_data,
+            commands::stats::get_recent_activity,
+            commands::stats::get_trend_data,
             // ─── Analytics (V11) ──────────────────────────
             commands::analytics::get_analytics_summary,
             commands::analytics::get_source_breakdown,
@@ -132,14 +147,17 @@ pub fn run() {
             commands::backup::export_backup,
             commands::backup::import_backup,
             commands::backup::rollback_backup,
-            // ─── Cloud Sync (V11) ─────────────────────────
+            // ─── Cloud Sync (V11 + V17 multi-cloud) ───────
+            commands::cloud_sync::get_all_sync_status,
+            commands::cloud_sync::get_cloud_config,
+            commands::cloud_sync::save_cloud_config,
+            commands::cloud_sync::delete_cloud_config,
+            commands::cloud_sync::test_cloud_connection,
             commands::cloud_sync::init_onedrive_oauth,
             commands::cloud_sync::complete_onedrive_oauth,
-            commands::cloud_sync::get_sync_status,
             commands::cloud_sync::sync_to_cloud,
             commands::cloud_sync::sync_from_cloud,
             commands::cloud_sync::get_sync_log,
-            commands::cloud_sync::configure_sync,
             // ─── Merge / Dedup (V11) ──────────────────────
             commands::merge::detect_duplicates,
             commands::merge::preview_merge,
@@ -155,6 +173,10 @@ pub fn run() {
             commands::resume_parser::parse_resume,
             commands::resume_parser::parse_resume_text,
             commands::resume_parser::parse_resume_enhance,
+            commands::resume_parser::save_resume,
+            commands::resume_parser::list_resumes,
+            commands::resume_parser::batch_parse_resumes,
+            commands::resume_parser::parse_resume_image_base64,
             // ─── OCR Configs ──────────────────────────────
             commands::ocr_configs::list_ocr_configs,
             commands::ocr_configs::create_ocr_config,
@@ -163,6 +185,11 @@ pub fn run() {
             commands::ocr_configs::get_default_ocr_config,
             commands::ocr_configs::test_ocr_connection,
             commands::ocr_configs::ocr_image,
+            // ─── Portfolio ────────────────────────────────
+            commands::portfolio::upload_portfolio_file,
+            commands::portfolio::add_portfolio_link,
+            commands::portfolio::list_portfolios,
+            commands::portfolio::delete_portfolio,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

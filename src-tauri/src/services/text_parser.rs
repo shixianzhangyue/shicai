@@ -54,7 +54,7 @@ fn extract_name(text: &str) -> Option<String> {
                 if let Some(name_match) = caps.get(1) {
                     let name = name_match.as_str().trim();
                     // Validate: should be 2-4 characters, not contain digits or special chars
-                    if name.len() >= 2 && name.len() <= 4 && !name.chars().any(|c| c.is_numeric() || "!@#$%^&*()".contains(c)) {
+                    if name.chars().count() >= 2 && name.chars().count() <= 4 && !name.chars().any(|c| c.is_numeric() || "!@#$%^&*()".contains(c)) {
                         return Some(name.to_string());
                     }
                 }
@@ -361,6 +361,104 @@ mod tests {
     #[test]
     fn test_extract_expected_salary() {
         assert_eq!(extract_expected_salary("期望薪资：15-20K"), Some("15-20K".to_string()));
-        assert_eq!(extract_expected_salary("薪资：20K"), Some("20K".to_string()));
+        assert_eq!(extract_expected_salary("期望薪酬:25-30K"), Some("25-30K".to_string()));
+        assert_eq!(extract_expected_salary("无薪资信息"), None);
+    }
+
+    #[test]
+    fn test_extract_name() {
+        assert_eq!(extract_name("姓名：张三\n电话：13812345678"), Some("张三".to_string()));
+        assert_eq!(extract_name("姓名:李四\n"), Some("李四".to_string()));
+        // Name alone on first line (matches ^pattern$)
+        assert_eq!(extract_name("王五"), Some("王五".to_string()));
+        // Should not match names with digits or special chars
+        assert_eq!(extract_name("姓名：张三1"), None);
+        // Empty text
+        assert_eq!(extract_name(""), None);
+        // No name label and not alone on first line
+        assert_eq!(extract_name("王五\n手机：13800001111"), None);
+    }
+
+    #[test]
+    fn test_extract_gender() {
+        assert_eq!(extract_gender("性别：男"), Some("男".to_string()));
+        assert_eq!(extract_gender("性别:女"), Some("女".to_string()));
+        assert_eq!(extract_gender("性 别：男"), Some("男".to_string()));
+        assert_eq!(extract_gender("无性别信息"), None);
+    }
+
+    #[test]
+    fn test_extract_birth_date() {
+        assert_eq!(extract_birth_date("出生日期：1990-05-15"), Some("1990-05-15".to_string()));
+        assert_eq!(extract_birth_date("出生日期:1988/03/20"), Some("1988/03/20".to_string()));
+        assert_eq!(extract_birth_date("出生年月：1995.08"), Some("1995.08".to_string()));
+        // Year out of reasonable range
+        assert_eq!(extract_birth_date("日期：1800-01-01"), None);
+    }
+
+    #[test]
+    fn test_extract_current_company() {
+        assert_eq!(extract_current_company("公司名称：阿里巴巴"), Some("阿里巴巴".to_string()));
+        assert_eq!(extract_current_company("工作单位：腾讯科技"), Some("腾讯科技".to_string()));
+        assert_eq!(extract_current_company("所在公司：字节跳动"), Some("字节跳动".to_string()));
+        assert_eq!(extract_current_company("无公司信息"), None);
+    }
+
+    #[test]
+    fn test_extract_current_position() {
+        assert_eq!(extract_current_position("职位：高级工程师"), Some("高级工程师".to_string()));
+        assert_eq!(extract_current_position("岗位:产品经理"), Some("产品经理".to_string()));
+        assert_eq!(extract_current_position("职务：技术总监"), Some("技术总监".to_string()));
+        assert_eq!(extract_current_position("无职位信息"), None);
+    }
+
+    #[test]
+    fn test_extract_expected_city() {
+        assert_eq!(extract_expected_city("期望城市：北京"), Some("北京".to_string()));
+        assert_eq!(extract_expected_city("期望工作地:上海"), Some("上海".to_string()));
+        assert_eq!(extract_expected_city("现居地：深圳"), Some("深圳".to_string()));
+        assert_eq!(extract_expected_city("无城市信息"), None);
+    }
+
+    #[test]
+    fn test_extract_skills() {
+        let text = "技能：Python, React, Docker, MySQL";
+        let skills = extract_skills(text);
+        assert!(skills.contains(&"Python".to_string()));
+        assert!(skills.contains(&"React".to_string()));
+        assert!(skills.contains(&"Docker".to_string()));
+        assert!(skills.contains(&"MySQL".to_string()));
+        assert!(!skills.contains(&"Rust".to_string()));
+    }
+
+    #[test]
+    fn test_extract_skills_fallback() {
+        // When no "技能" section, search entire text
+        let text = "熟练掌握Java和Spring框架，熟悉Redis缓存";
+        let skills = extract_skills(text);
+        assert!(skills.contains(&"Java".to_string()));
+        assert!(skills.contains(&"Spring".to_string()));
+        assert!(skills.contains(&"Redis".to_string()));
+    }
+
+    #[test]
+    fn test_parse_resume_text_regex_integration() {
+        let resume = "姓名：张三\n性别：男\n电话：13812345678\n邮箱：zhangsan@example.com\n学历：本科\n工作经验：5年\n期望薪资：20-30K\n期望城市：北京\n公司名称：阿里巴巴\n职位：高级工程师\n技能：Java, React, MySQL";
+        let parsed = parse_resume_text_regex(resume);
+
+        assert_eq!(parsed.name, Some("张三".to_string()));
+        assert_eq!(parsed.phone, Some("13812345678".to_string()));
+        assert_eq!(parsed.email, Some("zhangsan@example.com".to_string()));
+        assert_eq!(parsed.gender, Some("男".to_string()));
+        assert_eq!(parsed.education, Some("本科".to_string()));
+        assert_eq!(parsed.years_exp, Some(5));
+        assert_eq!(parsed.expected_salary, Some("20-30K".to_string()));
+        assert_eq!(parsed.expected_city, Some("北京".to_string()));
+        assert_eq!(parsed.current_company, Some("阿里巴巴".to_string()));
+        assert_eq!(parsed.current_position, Some("高级工程师".to_string()));
+        assert!(parsed.skills.contains(&"Java".to_string()));
+        assert!(parsed.skills.contains(&"React".to_string()));
+        assert!(parsed.skills.contains(&"MySQL".to_string()));
+        assert_eq!(parsed.parse_source, "ocr_regex");
     }
 }

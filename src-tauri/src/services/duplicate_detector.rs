@@ -343,6 +343,11 @@ pub fn merge_candidates(
     let conn = pool.get().map_err(|e| format!("Failed to get DB connection: {}", e))?;
     let now = chrono::Local::now().to_rfc3339();
 
+    // Wrap all merge operations in a transaction for data consistency
+    conn.execute("BEGIN TRANSACTION", [])
+        .map_err(|e| format!("Failed to begin transaction: {}", e))?;
+
+    let merge_result = (|| -> Result<(), String> {
     // Move resumes from secondary to primary
     conn.execute(
         "UPDATE resumes SET candidate_id = ?1 WHERE candidate_id = ?2 AND deleted_at IS NULL",
@@ -431,4 +436,18 @@ pub fn merge_candidates(
     );
 
     Ok(())
+    })(); // End of merge closure
+
+    // Commit or rollback based on result
+    match merge_result {
+        Ok(()) => {
+            conn.execute("COMMIT", [])
+                .map_err(|e| format!("Failed to commit transaction: {}", e))?;
+            Ok(())
+        }
+        Err(e) => {
+            conn.execute("ROLLBACK", []).ok();
+            Err(e)
+        }
+    }
 }

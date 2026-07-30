@@ -28,8 +28,9 @@ function DeleteJobDialog({ open, onOpenChange, job, onConfirm }: DeleteJobDialog
             确认删除职位？
           </DialogTitle>
           <DialogDescription className="text-left leading-relaxed">
-            职位「{job?.title ?? ''}」将被移至回收站（软删除）。关联的候选人
-            pipeline 数据不会丢失，但不再显示在当前列表中。此操作会被记录到审计日志。
+            职位「{job?.title ?? ''}」将被<strong className="text-red-400">永久删除</strong>。
+            关联的流程阶段会被清除，已关联的候选人将保留但失去职位关联。
+            此操作不可撤销。
           </DialogDescription>
         </DialogHeader>
 

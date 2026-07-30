@@ -41,3 +41,11 @@ coverage/
 .cache/
 *.tgz
 *.tar.gz
+
+# pnpm local content-addressable store
+.pnpm-store/
+
+# Stray empty/junk artifacts
+nul
+src-tauri/nul
+.DS_Store

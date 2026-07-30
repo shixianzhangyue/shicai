@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useCandidateStore } from '@/stores/candidateStore';
 import { api } from '@/lib/api';
+import { notify } from '@/lib/notify';
 import { X, Zap, User, Phone } from 'lucide-react';
 
 interface QuickRecordProps {
@@ -128,7 +129,7 @@ export function QuickRecord({ open, onClose }: QuickRecordProps) {
       setMatches([]);
       onClose();
     } catch (err) {
-      console.error('Failed to create follow-up:', err);
+      notify.error('Failed to create follow-up');
     } finally {
       setLoading(false);
     }

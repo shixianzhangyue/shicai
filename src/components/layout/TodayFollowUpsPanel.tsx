@@ -3,6 +3,7 @@ import { api } from '@/lib/api';
 import type { FollowUpWithCandidate } from '@/types';
 import { X, Bell, User, Phone, Calendar, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { notify } from '@/lib/notify';
 
 interface TodayFollowUpsPanelProps {
   open: boolean;
@@ -26,7 +27,7 @@ export function TodayFollowUpsPanel({ open, onClose }: TodayFollowUpsPanelProps)
       const data = await api.followUps.getToday();
       setFollowUps(data);
     } catch (err) {
-      console.error('Failed to fetch today follow-ups:', err);
+      notify.error('Failed to fetch today follow-ups');
     } finally {
       setLoading(false);
     }

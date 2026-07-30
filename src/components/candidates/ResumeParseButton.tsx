@@ -8,7 +8,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { FileText, Clipboard } from 'lucide-react';
 
 interface ResumeParseButtonProps {
-  onParseSuccess: (result: ParsedResume) => void;
+  onParseSuccess: (result: ParsedResume, originalFilePath?: string) => void;
   onParseError?: (error: string) => void;
 }
 
@@ -63,7 +63,7 @@ function ResumeParseButton({ onParseSuccess, onParseError }: ResumeParseButtonPr
         const result = await api.resumeParser.parse(filePath);
 
         setStage('preview');
-        onParseSuccess(result);
+        onParseSuccess(result, filePath);
         setStage('filled');
 
         // Reset after a while

@@ -2,15 +2,18 @@ import { useState, useEffect } from "react";
 import {
   Briefcase,
   Users,
+  UserCheck,
   LayoutDashboard,
   Settings,
   ChevronLeft,
   ChevronRight,
   Bell,
+  Trash2,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { api } from "@/lib/api";
 import { TodayFollowUpsPanel } from "./TodayFollowUpsPanel";
+import { notify } from "@/lib/notify";
 
 interface NavItem {
   path: string;
@@ -21,7 +24,9 @@ interface NavItem {
 const navItems: NavItem[] = [
   { path: "/dashboard", label: "仪表盘", icon: LayoutDashboard },
   { path: "/jobs", label: "职位管理", icon: Briefcase },
+  { path: "/candidates", label: "候选人", icon: UserCheck },
   { path: "/talent-pool", label: "人才库", icon: Users },
+  { path: "/recycle-bin", label: "回收站", icon: Trash2 },
   { path: "/settings", label: "设置", icon: Settings },
 ];
 
@@ -40,7 +45,7 @@ function Sidebar() {
         const followUps = await api.followUps.getToday();
         setFollowUpCount(followUps.length);
       } catch (err) {
-        console.error("Failed to fetch follow-up count:", err);
+        notify.error("Failed to fetch follow-up count");
       }
     };
     fetchCount();
@@ -62,7 +67,7 @@ function Sidebar() {
                 <Briefcase className="w-4 h-4 text-white" />
               </div>
               <span className="text-base font-semibold text-[#e2e8f0]">
-                TalentVault
+                拾才
               </span>
             </div>
           )}

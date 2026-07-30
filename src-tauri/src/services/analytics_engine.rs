@@ -95,27 +95,34 @@ pub fn get_conversion_funnel(
 ) -> Result<Vec<FunnelStep>, String> {
     let conn = pool.get().map_err(|e| format!("Failed to get DB connection: {}", e))?;
 
-    let base_condition = match job_id {
-        Some(jid) => format!("AND cp.job_id = '{}'", jid.replace('\'', "''")),
-        None => String::new(),
+    // Use parameterized query to prevent SQL injection
+    let (count_sql, params): (&str, Vec<Box<dyn rusqlite::types::ToSql>>) = match job_id {
+        Some(jid) => (
+            "SELECT ps.name, COUNT(DISTINCT cp.candidate_id) as cnt \
+             FROM pipeline_stages ps \
+             LEFT JOIN candidate_pipeline cp ON cp.current_stage_id = ps.id AND cp.job_id = ?1 \
+             GROUP BY ps.name \
+             ORDER BY ps.sort_order ASC",
+            vec![Box::new(jid.to_string())],
+        ),
+        None => (
+            "SELECT ps.name, COUNT(DISTINCT cp.candidate_id) as cnt \
+             FROM pipeline_stages ps \
+             LEFT JOIN candidate_pipeline cp ON cp.current_stage_id = ps.id \
+             GROUP BY ps.name \
+             ORDER BY ps.sort_order ASC",
+            vec![],
+        ),
     };
 
-    // Count candidates at each stage
-    let count_sql = format!(
-        "SELECT ps.name, COUNT(DISTINCT cp.candidate_id) as cnt \
-         FROM pipeline_stages ps \
-         LEFT JOIN candidate_pipeline cp ON cp.current_stage_id = ps.id {} \
-         GROUP BY ps.name \
-         ORDER BY ps.sort_order ASC",
-        base_condition
-    );
-
     let mut stmt = conn
-        .prepare(&count_sql)
+        .prepare(count_sql)
         .map_err(|e| format!("Failed to prepare funnel query: {}", e))?;
 
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
     let rows: Vec<(String, i64)> = stmt
-        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .query_map(param_refs.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))
         .map_err(|e| format!("Failed to execute funnel query: {}", e))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Failed to collect funnel data: {}", e))?;

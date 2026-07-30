@@ -1,11 +1,10 @@
-export const APP_NAME = 'TalentVault';
+export const APP_NAME = '拾才';
 
 export const DEFAULT_PIPELINE_STAGES = [
   '简历筛选',
-  '初面',
-  '复面',
-  '终面',
-  '待入职',
+  '面试',
+  'Offer沟通',
+  '已入职',
 ];
 
 export const JOB_STATUS_LABELS: Record<string, string> = {

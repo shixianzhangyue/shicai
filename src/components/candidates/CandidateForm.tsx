@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Candidate, EducationLevel, CandidateSource, ParsedResume } from '@/types';
 import { useCandidateStore } from '@/stores/candidateStore';
 import { useTagStore } from '@/stores/tagStore';
+import { api } from '@/lib/api';
 import {
   Dialog,
   DialogContent,
@@ -55,6 +56,9 @@ function CandidateForm({ open, onOpenChange, editingCandidate }: CandidateFormPr
   const [submitting, setSubmitting] = useState(false);
   const [parsePreviewOpen, setParsePreviewOpen] = useState(false);
   const [parsedData, setParsedData] = useState<ParsedResume | null>(null);
+  const [originalFilePath, setOriginalFilePath] = useState<string | null>(null);
+  const [pastingImage, setPastingImage] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   const isEditing = !!editingCandidate;
 
@@ -83,6 +87,11 @@ function CandidateForm({ open, onOpenChange, editingCandidate }: CandidateFormPr
         setSelectedTagIds([]);
       }
       setFormError('');
+      // Reset parsed resume state when dialog opens
+      if (!editingCandidate) {
+        setParsedData(null);
+        setOriginalFilePath(null);
+      }
     }
   }, [open, editingCandidate, fetchTags]);
 
@@ -114,8 +123,9 @@ function CandidateForm({ open, onOpenChange, editingCandidate }: CandidateFormPr
     return true;
   };
 
-  const handleParseSuccess = (result: ParsedResume) => {
+  const handleParseSuccess = (result: ParsedResume, filePath?: string) => {
     setParsedData(result);
+    if (filePath) setOriginalFilePath(filePath);
     setParsePreviewOpen(true);
   };
 
@@ -134,6 +144,52 @@ function CandidateForm({ open, onOpenChange, editingCandidate }: CandidateFormPr
   const handleParseError = (error: string) => {
     setFormError(error);
   };
+
+  // Clipboard image paste handler — Ctrl+V screenshot/clipboard image → OCR + LLM
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    // Only handle when dialog is open and not editing
+    if (!open || isEditing) return;
+
+    const items = Array.from(e.clipboardData?.items || []);
+    const imageItem = items.find(item => item.type.startsWith('image/'));
+    if (!imageItem) return;
+
+    e.preventDefault();
+    setPastingImage(true);
+    setFormError('正在识别剪贴板图片...');
+
+    try {
+      const file = imageItem.getAsFile();
+      if (!file) throw new Error('无法读取剪贴板图片');
+
+      // Convert to base64
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result as string;
+          // Remove data:image/xxx;base64, prefix
+          const base64 = result.split(',')[1];
+          if (base64) resolve(base64);
+          else reject(new Error('Base64 conversion failed'));
+        };
+        reader.onerror = () => reject(new Error('FileReader error'));
+        reader.readAsDataURL(file);
+      });
+
+      const base64 = await base64Promise;
+      const result = await api.resumeParser.parseImageBase64(base64);
+
+      setParsedData(result);
+      setOriginalFilePath(null); // No file path for pasted images
+      setParsePreviewOpen(true);
+      setFormError('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setFormError(`图片解析失败: ${msg}`);
+    } finally {
+      setPastingImage(false);
+    }
+  }, [open, isEditing]);
 
   const handleSubmit = async () => {
     if (!validate()) return;
@@ -155,9 +211,22 @@ function CandidateForm({ open, onOpenChange, editingCandidate }: CandidateFormPr
       } else {
         // Auto-add to talent pool when creating from parsed resume
         const autoPool = parsedData !== null;
-        await createCandidate(payload, autoPool);
+        const created = await createCandidate(payload, autoPool);
+
+        // Save the original resume file and create a resumes table record
+        if (created && originalFilePath) {
+          try {
+            await api.resumeParser.save(created.id, originalFilePath, parsedData ?? undefined);
+          } catch (resumeErr) {
+            // Non-fatal: candidate is already created, just log the resume save failure
+            console.warn('Failed to save original resume file:', resumeErr);
+          }
+        }
       }
       onOpenChange(false);
+      // Reset state
+      setParsedData(null);
+      setOriginalFilePath(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setFormError(msg);
@@ -169,7 +238,11 @@ function CandidateForm({ open, onOpenChange, editingCandidate }: CandidateFormPr
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          ref={dialogRef}
+          className="max-w-lg max-h-[90vh] overflow-y-auto"
+          onPaste={handlePaste}
+        >
           <DialogHeader>
             <DialogTitle>{isEditing ? '编辑候选人' : '新建候选人'}</DialogTitle>
             <DialogDescription>
@@ -182,11 +255,20 @@ function CandidateForm({ open, onOpenChange, editingCandidate }: CandidateFormPr
           <div className="space-y-4 py-2">
             {/* Smart parse section */}
             {!isEditing && (
-              <div className="flex items-center gap-2 pb-2 border-b border-[#2a2d35]">
-                <ResumeParseButton
-                  onParseSuccess={handleParseSuccess}
-                  onParseError={handleParseError}
-                />
+              <div className="flex flex-col gap-2 pb-2 border-b border-[#2a2d35]">
+                <div className="flex items-center gap-2">
+                  <ResumeParseButton
+                    onParseSuccess={handleParseSuccess}
+                    onParseError={handleParseError}
+                  />
+                </div>
+                {pastingImage && (
+                  <p className="text-xs text-[#10b981] flex items-center gap-1">
+                    <span className="inline-block w-3 h-3 rounded-full border-2 border-[#10b981] border-t-transparent animate-spin" />
+                    正在识别剪贴板图片...
+                  </p>
+                )}
+                <p className="text-[10px] text-[#475569] -mt-1">支持 Ctrl+V 直接粘贴截图/剪贴板图片进行智能识别</p>
               </div>
             )}
 

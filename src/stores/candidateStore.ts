@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Candidate, PaginatedCandidates, CandidateListParams } from '@/types';
 import { api } from '@/lib/api';
+import { notify } from '@/lib/notify';
 
 interface CandidateFilters {
   tags: string[];
@@ -37,7 +38,7 @@ interface CandidateState {
 
   // Actions
   fetchCandidates: () => Promise<void>;
-  createCandidate: (input: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'inTalentPool'>, autoPool?: boolean) => Promise<void>;
+  createCandidate: (input: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'inTalentPool'>, autoPool?: boolean) => Promise<Candidate>;
   updateCandidate: (id: string, input: Partial<Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'inTalentPool'>>) => Promise<void>;
   deleteCandidate: (id: string) => Promise<void>;
   setSearchKeyword: (kw: string) => void;
@@ -137,6 +138,7 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
       await get().fetchCandidates();
       // Add to search index
       get().addToSearchIndex(candidate);
+      return candidate;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       set({ error: msg, loading: false });
@@ -228,7 +230,7 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
       }
       set({ nameMap, phoneLast4Map });
     } catch (err) {
-      console.error('Failed to load search index:', err);
+      notify.error('Failed to load search index');
     }
   },
 

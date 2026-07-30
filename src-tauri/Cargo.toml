@@ -1,8 +1,8 @@
 [package]
 name = "talent-vault"
 version = "0.1.0"
-description = "TalentVault - Local recruitment management system"
-authors = ["TalentVault Team"]
+description = "Shicore 拾才 - 本地招聘管理系统"
+authors = ["Shicore Team"]
 edition = "2021"
 rust-version = "1.70"
 
@@ -31,15 +31,22 @@ validator = { version = "0.18", features = ["derive"] }
 log = "0.4"
 simplelog = "0.12"
 nanoid = "0.4"
-reqwest = { version = "0.12", features = ["json", "blocking"] }
+reqwest = { version = "0.12", features = ["json", "blocking", "multipart"] }
+aws-sdk-s3 = "1"
+aws-config = "1"
+aws-credential-types = "1"
 pdf-extract = "0.7"
 docx-rs = "0.4"
 thiserror = "1.0"
 base64 = "0.22"
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread"] }
 regex = "1.12.3"
+aes-gcm = "0.10"
+rand = "0.8"
 
 [profile.release]
 strip = true
 lto = true
-opt-level = "z"
+# "s" keeps the binary small without the runtime cost of "z" (which is
+# noticeable on the OCR/AES/regex-heavy paths in this app).
+opt-level = "s"

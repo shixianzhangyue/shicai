@@ -112,6 +112,19 @@ export interface Candidate {
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  // V8 enhanced fields
+  gender: string | null;
+  birthDate: string | null;
+  expectedCity: string | null;
+  expectedSalary: string | null;
+  graduationDate: string | null;
+  school: string | null;
+  major: string | null;
+  isStarred: boolean;
+  isHidden: boolean;
+  workExperiences: string; // JSON string of WorkExperience[]
+  educationHistory: string; // JSON string of EducationHistory[]
+  sourceDetail: string | null;
   // V12 enhanced fields
   avatarUrl: string | null;
   age: number | null;
@@ -134,6 +147,7 @@ export interface CandidateListParams {
   maxExp?: number;
   source?: string;
   inTalentPool?: boolean;
+  excludeActivePipeline?: boolean;
   page?: number;
   pageSize?: number;
   sortBy?: string;
@@ -167,7 +181,7 @@ export interface PipelineStage {
 export interface CandidatePipeline {
   id: string;
   candidateId: string;
-  jobId: string;
+  jobId: string | null;
   currentStageId: string | null;
   status: PipelineStatus;
   enteredAt: string;
@@ -193,8 +207,8 @@ export interface CandidateWithPipeline {
   yearsExp: number | null;
   age: number | null;
   avatarUrl: string | null;
-  jobId: string;
-  jobTitle: string;
+  jobId: string | null;
+  jobTitle: string | null;
   currentStageId: string | null;
   currentStageName: string | null;
   status: string;
@@ -202,6 +216,14 @@ export interface CandidateWithPipeline {
   interviewNotes: string | null;
   appliedAt: string | null;
   updatedAt: string;
+  // V8 fields (optional for backward compat)
+  workExperiences?: string;
+  educationHistory?: string;
+  education?: string | null;
+  school?: string | null;
+  major?: string | null;
+  expectedCity?: string | null;
+  tags?: string[];
 }
 
 export interface PaginatedCandidateWithPipeline {
@@ -270,6 +292,15 @@ export interface ImportResult {
   errors: string[];
 }
 
+/** Single file result from batch resume parse */
+export interface BatchParseItem {
+  filePath: string;
+  fileName: string;
+  success: boolean;
+  data?: ParsedResume;
+  error?: string;
+}
+
 export interface OverviewStats {
   openJobs: number;
   totalCandidates: number;
@@ -284,6 +315,23 @@ export interface FunnelData {
   jobTitle: string;
   stageName: string;
   count: number;
+}
+
+export interface RecentActivity {
+  id: string;
+  activityType: string;
+  title: string;
+  description: string;
+  createdAt: string;
+}
+
+export interface TrendData {
+  candidatesThisWeek: number;
+  candidatesLastWeek: number;
+  interviewsThisWeek: number;
+  interviewsLastWeek: number;
+  hiredThisWeek: number;
+  hiredLastWeek: number;
 }
 
 export interface RelationWithCandidate {
@@ -304,15 +352,27 @@ export interface PipelineEntry {
   id: string;
   candidateId: string;
   candidateName: string;
-  jobId: string;
+  jobId: string | null;
+  jobTitle: string | null;
   currentStageId: string | null;
   currentStageName: string | null;
-  status: string;
+  status: PipelineStatus;
   enteredAt: string;
   updatedAt: string;
   interviewConclusion: string | null;
   interviewNotes: string | null;
   appliedAt: string | null;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  candidateId: string;
+  pipelineId: string;
+  jobId: string | null;
+  jobTitle: string | null;
+  action: 'enter_job' | 'leave_job' | 'reject' | 'pool';
+  actionDetail: string | null;
+  createdAt: string;
 }
 
 export interface FollowUpWithCandidate {
@@ -323,11 +383,21 @@ export interface FollowUpWithCandidate {
 export interface TalentEntry {
   candidateId: string;
   candidateName: string;
-  candidatePhone: string | null;
-  candidateEmail: string | null;
-  originalJobId: string | null;
-  originalJobTitle: string | null;
-  pooledAt: string;
+  phone: string | null;
+  email: string | null;
+  currentCompany: string | null;
+  source: string;
+  tags: string[];
+  yearsExp: number | null;
+  age: number | null;
+  avatarUrl: string | null;
+  pipelineId: string | null;
+  pipelineStatus: string | null;
+  jobId: string | null;
+  jobTitle: string | null;
+  currentStageId: string | null;
+  currentStageName: string | null;
+  pooledAt: string | null;
 }
 
 export interface OcrConfig {
@@ -362,4 +432,70 @@ export interface OcrResult {
   wordsResult: WordsResult[];
   wordsResultNum: number;
   rawResponse: Record<string, unknown>;
+}
+
+export interface ResumeRecord {
+  id: string;
+  candidateId: string;
+  filePath: string;
+  fileName: string;
+  fileType: string;
+  parsedData: string | null;
+  uploadedAt: string;
+  resumeType: string | null;
+  version: number | null;
+  isCurrent: boolean | null;
+  parsedBy: string | null;
+  parsedAt: string | null;
+  rawText: string | null;
+  parsedJson: string | null;
+}
+
+export interface PortfolioItem {
+  id: string;
+  candidateId: string;
+  filePath: string;
+  fileName: string;
+  fileType: string; // "file" or "link"
+  description: string | null;
+  uploadedAt: string;
+}
+
+export interface CloudConfig {
+  provider: string;
+  syncEnabled: boolean;
+  lastSyncAt: string | null;
+  syncPath: string;
+  tokenValid: boolean;
+  serverUrl: string | null;
+  bucket: string | null;
+  region: string | null;
+  username: string | null;
+}
+
+export interface SaveCloudConfigInput {
+  provider: string;
+  syncEnabled?: boolean;
+  syncPath?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  tokenExpiresAt?: string;
+  serverUrl?: string;
+  bucket?: string;
+  region?: string;
+  username?: string;
+  password?: string;
+}
+
+export interface SyncLogEntry {
+  id: string;
+  provider: string;
+  fileType: string;
+  localPath: string;
+  cloudPath: string;
+  syncStatus: string;
+  errorMessage: string | null;
+  fileSize: number | null;
+  syncedAt: string | null;
+  createdAt: string;
 }

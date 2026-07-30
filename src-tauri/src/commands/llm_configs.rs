@@ -24,10 +24,17 @@ pub fn list_llm_configs(state: tauri::State<DbPool>) -> Result<Vec<LlmConfig>, S
 
     let configs = stmt
         .query_map([], |row| {
+            let api_key: String = row.get(2)?;
+            // SECURITY: Mask API key before sending to frontend
+            let masked_key = if api_key.len() > 8 {
+                format!("{}...{}", &api_key[..4], &api_key[api_key.len()-4..])
+            } else {
+                "****".to_string()
+            };
             Ok(LlmConfig {
                 id: row.get(0)?,
                 provider: row.get(1)?,
-                api_key: row.get(2)?,
+                api_key: masked_key,
                 base_url: row.get(3)?,
                 model_name: row.get(4)?,
                 is_default: row.get::<_, i32>(5)? != 0,
@@ -81,10 +88,16 @@ pub fn create_llm_config(
             "SELECT id, provider, api_key, base_url, model_name, is_default, created_at, updated_at FROM llm_configs WHERE id = ?1",
             params![id],
             |row| {
+                let api_key: String = row.get(2)?;
+                let masked_key = if api_key.len() > 8 {
+                    format!("{}...{}", &api_key[..4], &api_key[api_key.len()-4..])
+                } else {
+                    "****".to_string()
+                };
                 Ok(LlmConfig {
                     id: row.get(0)?,
                     provider: row.get(1)?,
-                    api_key: row.get(2)?,
+                    api_key: masked_key,
                     base_url: row.get(3)?,
                     model_name: row.get(4)?,
                     is_default: row.get::<_, i32>(5)? != 0,
@@ -192,10 +205,16 @@ pub fn update_llm_config(
             "SELECT id, provider, api_key, base_url, model_name, is_default, created_at, updated_at FROM llm_configs WHERE id = ?1",
             params![id],
             |row| {
+                let api_key: String = row.get(2)?;
+                let masked_key = if api_key.len() > 8 {
+                    format!("{}...{}", &api_key[..4], &api_key[api_key.len()-4..])
+                } else {
+                    "****".to_string()
+                };
                 Ok(LlmConfig {
                     id: row.get(0)?,
                     provider: row.get(1)?,
-                    api_key: row.get(2)?,
+                    api_key: masked_key,
                     base_url: row.get(3)?,
                     model_name: row.get(4)?,
                     is_default: row.get::<_, i32>(5)? != 0,
@@ -271,7 +290,7 @@ pub fn get_default_llm_config(state: tauri::State<DbPool>) -> Result<Option<LlmC
 }
 
 /// Tests the LLM connection with the provided configuration.
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn test_llm_connection(
     provider: String,
     api_key: String,

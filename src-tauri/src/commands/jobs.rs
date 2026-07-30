@@ -306,7 +306,8 @@ pub fn update_job(
     Ok(job)
 }
 
-/// Soft-deletes a job and records an audit log entry.
+/// Hard-deletes a job and its associated pipeline stages.
+/// candidate_pipeline entries get their job_id set to NULL (V13 supports nullable).
 #[tauri::command]
 pub fn delete_job(state: tauri::State<DbPool>, id: String) -> Result<(), String> {
     let conn = state.get().map_err(|e| {
@@ -315,61 +316,49 @@ pub fn delete_job(state: tauri::State<DbPool>, id: String) -> Result<(), String>
         msg
     })?;
 
-    // Fetch the record to snapshot for the audit log.
-    let job = conn
+    // Fetch the job title for logging
+    let title: String = conn
         .query_row(
-            "SELECT id, title, department, salary_min, salary_max, description, requirements, status, tags, headcount, created_at, updated_at FROM jobs WHERE id = ?1 AND deleted_at IS NULL",
+            "SELECT title FROM jobs WHERE id = ?1 AND deleted_at IS NULL",
             params![&id],
-            |row| {
-                let tags_str: String = row.get(8)?;
-                let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
-                Ok(Job {
-                    id: row.get(0)?,
-                    title: row.get(1)?,
-                    department: row.get(2)?,
-                    salary_min: row.get(3)?,
-                    salary_max: row.get(4)?,
-                    description: row.get(5)?,
-                    requirements: row.get(6)?,
-                    status: row.get(7)?,
-                    tags,
-                    headcount: row.get(9)?,
-                    created_at: row.get(10)?,
-                    updated_at: row.get(11)?,
-                })
-            },
+            |row| row.get(0),
         )
-        .map_err(|e| {
-            let msg = format!("Failed to fetch job for deletion {}: {}", id, e);
-            log::error!("{}", msg);
-            msg
-        })?;
+        .map_err(|e| format!("Job not found: {}", e))?;
 
-    let old_data = serde_json::to_string(&job).unwrap_or_else(|_| "{}".to_string());
-    let now = Local::now().to_rfc3339();
-    let audit_id = nanoid::nanoid!();
-
+    // Set job_id to NULL for associated pipeline entries
     conn.execute(
-        "INSERT INTO audit_logs (id, table_name, record_id, action, old_data, performed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![&audit_id, "jobs", &id, "soft_delete", &old_data, &now],
+        "UPDATE candidate_pipeline SET job_id = NULL WHERE job_id = ?1",
+        params![&id],
     )
     .map_err(|e| {
-        let msg = format!("Failed to write audit log for job deletion {}: {}", id, e);
+        let msg = format!("Failed to unlink pipeline entries: {}", e);
         log::error!("{}", msg);
         msg
     })?;
 
+    // Delete pipeline stages
     conn.execute(
-        "UPDATE jobs SET deleted_at = ?1 WHERE id = ?2",
-        params![&now, &id],
+        "DELETE FROM pipeline_stages WHERE job_id = ?1",
+        params![&id],
     )
     .map_err(|e| {
-        let msg = format!("Failed to soft-delete job {}: {}", id, e);
+        let msg = format!("Failed to delete pipeline stages: {}", e);
         log::error!("{}", msg);
         msg
     })?;
 
-    log::info!("Soft-deleted job '{}' (id {})", job.title, id);
+    // Hard delete the job
+    conn.execute(
+        "DELETE FROM jobs WHERE id = ?1",
+        params![&id],
+    )
+    .map_err(|e| {
+        let msg = format!("Failed to delete job {}: {}", id, e);
+        log::error!("{}", msg);
+        msg
+    })?;
+
+    log::info!("Deleted job '{}' (id {})", title, id);
     Ok(())
 }
 

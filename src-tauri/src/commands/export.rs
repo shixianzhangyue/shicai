@@ -195,22 +195,28 @@ pub fn export_data(
 
 /// Builds the SELECT column list from field keys.
 fn select_columns(fields: &[String]) -> String {
+    // SECURITY: whitelist of allowed export fields to prevent SQL injection
+    let whitelist: std::collections::HashMap<&str, &str> = [
+        ("name", "c.name"),
+        ("phone", "c.phone"),
+        ("email", "c.email"),
+        ("currentCompany", "c.current_company"),
+        ("currentPosition", "c.current_position"),
+        ("education", "c.education"),
+        ("yearsExp", "c.years_exp"),
+        ("source", "c.source"),
+        ("tags", "c.tags"),
+        ("createdAt", "c.created_at"),
+    ].iter().cloned().collect();
+
     fields
         .iter()
-        .map(|f| match f.as_str() {
-            "name" => "c.name".to_string(),
-            "phone" => "c.phone".to_string(),
-            "email" => "c.email".to_string(),
-            "currentCompany" => "c.current_company".to_string(),
-            "currentPosition" => "c.current_position".to_string(),
-            "education" => "c.education".to_string(),
-            "yearsExp" => "c.years_exp".to_string(),
-            "source" => "c.source".to_string(),
-            "tags" => "c.tags".to_string(),
-            "createdAt" => "c.created_at".to_string(),
-            other => {
-                log::warn!("Unknown export field: {}", other);
-                format!("c.{}", other)
+        .filter_map(|f| {
+            if let Some(col) = whitelist.get(f.as_str()) {
+                Some(col.to_string())
+            } else {
+                log::warn!("Skipped unknown export field: {}", f);
+                None
             }
         })
         .collect::<Vec<_>>()

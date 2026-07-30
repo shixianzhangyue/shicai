@@ -1,8 +1,10 @@
 use crate::db::pool::DbPool;
 use crate::services::baidu_ocr::{BaiduOcrClient, CreateOcrConfigInput, OcrConfig, UpdateOcrConfigInput, OcrResult};
+use crate::services::llm_client::{obfuscate_key, deobfuscate_key};
 use rusqlite::OptionalExtension;
 
 /// Lists all OCR configurations.
+/// SECURITY: API keys are masked before sending to frontend.
 #[tauri::command]
 pub async fn list_ocr_configs(
     state: tauri::State<'_, DbPool>,
@@ -19,11 +21,24 @@ pub async fn list_ocr_configs(
 
     let configs = stmt
         .query_map([], |row| {
+            let api_key: String = row.get(2)?;
+            let secret_key: String = row.get(3)?;
+            // SECURITY: Mask keys before sending to frontend
+            let masked_api = if api_key.len() > 8 {
+                format!("{}...{}", &api_key[..4], &api_key[api_key.len()-4..])
+            } else {
+                "****".to_string()
+            };
+            let masked_secret = if secret_key.len() > 8 {
+                format!("{}...{}", &secret_key[..4], &secret_key[secret_key.len()-4..])
+            } else {
+                "****".to_string()
+            };
             Ok(OcrConfig {
                 id: row.get(0)?,
                 provider: row.get(1)?,
-                api_key: row.get(2)?,
-                secret_key: row.get(3)?,
+                api_key: masked_api,
+                secret_key: masked_secret,
                 is_default: row.get::<_, i32>(4)? != 0,
                 created_at: row.get(5)?,
                 updated_at: row.get(6)?,
@@ -55,9 +70,13 @@ pub async fn create_ocr_config(
 
     let is_default = if count == 0 { 1 } else { 0 };
 
+    // SECURITY: Encrypt credentials before storing
+    let encrypted_api = obfuscate_key(&input.api_key);
+    let encrypted_secret = obfuscate_key(&input.secret_key);
+
     conn.execute(
         "INSERT INTO ocr_configs (provider, api_key, secret_key, is_default) VALUES (?1, ?2, ?3, ?4)",
-        [&input.provider, &input.api_key, &input.secret_key, &is_default.to_string()],
+        [&input.provider, &encrypted_api, &encrypted_secret, &is_default.to_string()],
     )
     .map_err(|e| format!("Database error: {}", e))?;
 
@@ -107,11 +126,11 @@ pub async fn update_ocr_config(
     }
     if let Some(api_key) = &input.api_key {
         updates.push("api_key = ?");
-        params.push(Box::new(api_key.clone()));
+        params.push(Box::new(obfuscate_key(api_key)));
     }
     if let Some(secret_key) = &input.secret_key {
         updates.push("secret_key = ?");
-        params.push(Box::new(secret_key.clone()));
+        params.push(Box::new(obfuscate_key(secret_key)));
     }
     if let Some(is_default) = input.is_default {
         updates.push("is_default = ?");
@@ -207,7 +226,7 @@ pub async fn get_default_ocr_config(
 }
 
 /// Tests OCR connection with the given configuration.
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn test_ocr_connection(
     _state: tauri::State<'_, DbPool>,
     api_key: String,
@@ -219,7 +238,7 @@ pub async fn test_ocr_connection(
 }
 
 /// Performs OCR on an image using the default configuration.
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn ocr_image(
     state: tauri::State<'_, DbPool>,
     image_base64: String,
@@ -246,7 +265,11 @@ pub async fn ocr_image(
             _ => format!("Database error: {}", e),
         })?;
 
-    BaiduOcrClient::recognize_image(&config.0, &config.1, &image_base64)
+    // SECURITY: Decrypt credentials before use
+    let api_key = deobfuscate_key(&config.0);
+    let secret_key = deobfuscate_key(&config.1);
+
+    BaiduOcrClient::recognize_image(&api_key, &secret_key, &image_base64)
         .await
         .map_err(|e| e.to_string())
 }

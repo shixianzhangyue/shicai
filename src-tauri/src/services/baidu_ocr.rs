@@ -134,14 +134,16 @@ impl BaiduOcrClient {
             .build()
             .map_err(|e| OcrError::ApiError(e.to_string()))?;
 
-        let url = format!(
-            "https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id={}&client_secret={}",
-            api_key, secret_key
-        );
+        // Use POST body instead of query string to avoid exposing credentials in URLs/logs
+        let url = "https://aip.baidubce.com/oauth/2.0/token";
 
         let resp = client
-            .post(&url)
+            .post(url)
             .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(format!(
+                "grant_type=client_credentials&client_id={}&client_secret={}",
+                api_key, secret_key
+            ))
             .send()
             .await?;
 

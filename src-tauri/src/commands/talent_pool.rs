@@ -3,20 +3,30 @@ use chrono::Local;
 use rusqlite::params;
 use serde::Serialize;
 
-/// Talent pool entry with candidate info.
+/// Talent pool entry — includes all non-deleted candidates with pipeline info.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TalentEntry {
     pub candidate_id: String,
     pub candidate_name: String,
-    pub candidate_phone: Option<String>,
-    pub candidate_email: Option<String>,
-    pub original_job_id: Option<String>,
-    pub original_job_title: Option<String>,
-    pub pooled_at: String,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+    pub current_company: Option<String>,
+    pub source: String,
+    pub tags: Vec<String>,
+    pub years_exp: Option<i32>,
+    pub age: Option<i32>,
+    pub avatar_url: Option<String>,
+    pub pipeline_id: Option<String>,
+    pub pipeline_status: Option<String>,
+    pub job_id: Option<String>,
+    pub job_title: Option<String>,
+    pub current_stage_id: Option<String>,
+    pub current_stage_name: Option<String>,
+    pub pooled_at: Option<String>,
 }
 
-/// Lists all pooled (rejected) candidates with optional filters.
+/// Lists all non-deleted candidates with their active pipeline info.
 #[tauri::command]
 pub fn list_talent_pool(
     state: tauri::State<DbPool>,
@@ -32,21 +42,22 @@ pub fn list_talent_pool(
     })?;
 
     let mut sql = String::from(
-        "SELECT DISTINCT 
-            c.id as candidate_id, c.name as candidate_name, c.phone, c.email,
-            cp.job_id as original_job_id, j.title as original_job_title,
-            cp.updated_at as pooled_at
-        FROM candidate_pipeline cp
-        JOIN candidates c ON cp.candidate_id = c.id
+        "SELECT 
+            c.id, c.name, c.phone, c.email, c.current_company, c.source, c.tags, c.years_exp, c.age, c.avatar_url,
+            cp.id, cp.status, cp.job_id, j.title, cp.current_stage_id, ps.name, cp.updated_at
+        FROM candidates c
+        LEFT JOIN candidate_pipeline cp ON cp.candidate_id = c.id AND cp.status = 'active'
         LEFT JOIN jobs j ON cp.job_id = j.id
-        WHERE cp.status = 'rejected' AND c.deleted_at IS NULL"
+        LEFT JOIN pipeline_stages ps ON cp.current_stage_id = ps.id
+        WHERE c.deleted_at IS NULL"
     );
 
     let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
     if let Some(kw) = keyword.filter(|k| !k.is_empty()) {
         sql.push_str(" AND (c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ?)");
-        let like = format!("%{}%", kw);
+        let escaped_kw = kw.replace('%', "\\%").replace('_', "\\_");
+        let like = format!("%{}%", escaped_kw);
         params_vec.push(Box::new(like.clone()));
         params_vec.push(Box::new(like.clone()));
         params_vec.push(Box::new(like));
@@ -62,15 +73,15 @@ pub fn list_talent_pool(
         params_vec.push(Box::new(src));
     }
 
-    // Tags filter requires JSON array matching
     if let Some(tag_list) = tags.filter(|t| !t.is_empty()) {
         for tag in tag_list {
             sql.push_str(" AND c.tags LIKE ?");
-            params_vec.push(Box::new(format!("%\"{}\"%", tag)));
+            let escaped = tag.replace('%', "\\%").replace('_', "\\_");
+            params_vec.push(Box::new(format!("%\"{}\"%", escaped)));
         }
     }
 
-    sql.push_str(" ORDER BY cp.updated_at DESC");
+    sql.push_str(" ORDER BY cp.updated_at DESC, c.created_at DESC");
 
     let param_refs: Vec<&dyn rusqlite::ToSql> = params_vec
         .iter()
@@ -85,14 +96,26 @@ pub fn list_talent_pool(
 
     let entries = stmt
         .query_map(rusqlite::params_from_iter(param_refs), |row| {
+            let tags_str: String = row.get(6)?;
+            let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
             Ok(TalentEntry {
                 candidate_id: row.get(0)?,
                 candidate_name: row.get(1)?,
-                candidate_phone: row.get(2)?,
-                candidate_email: row.get(3)?,
-                original_job_id: row.get(4)?,
-                original_job_title: row.get(5)?,
-                pooled_at: row.get(6)?,
+                phone: row.get(2)?,
+                email: row.get(3)?,
+                current_company: row.get(4)?,
+                source: row.get(5)?,
+                tags,
+                years_exp: row.get(7)?,
+                age: row.get(8)?,
+                avatar_url: row.get(9)?,
+                pipeline_id: row.get(10)?,
+                pipeline_status: row.get(11)?,
+                job_id: row.get(12)?,
+                job_title: row.get(13)?,
+                current_stage_id: row.get(14)?,
+                current_stage_name: row.get(15)?,
+                pooled_at: row.get(16)?,
             })
         })
         .map_err(|e| {
@@ -151,7 +174,7 @@ pub fn reactivate_candidate(
     Ok(crate::commands::pipeline::CandidatePipeline {
         id,
         candidate_id,
-        job_id,
+        job_id: Some(job_id),
         current_stage_id: first_stage,
         status: "active".to_string(),
         entered_at: now.clone(),
@@ -184,7 +207,6 @@ pub fn check_duplicate(
 
     if let Some(p) = phone.filter(|p| !p.is_empty()) {
         if p.len() == 4 {
-            // Phone last 4 digits match
             conditions.push("phone LIKE ?".to_string());
             params_vec.push(format!("%{}%", p));
         } else {
@@ -239,7 +261,6 @@ pub fn check_duplicate(
                 deleted_at: row.get(10)?,
                 created_at: row.get(11)?,
                 updated_at: row.get(12)?,
-                // V8 fields — defaults since this query doesn't select these columns
                 gender: None,
                 birth_date: None,
                 expected_city: None,

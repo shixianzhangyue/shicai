@@ -12,6 +12,7 @@ pub mod llm_configs;
 pub mod merge;
 pub mod ocr_configs;
 pub mod pipeline;
+pub mod portfolio;
 pub mod resume_parser;
 pub mod stats;
 pub mod tags;
